@@ -99,6 +99,39 @@ func TestUnitBucketCredentials_lifecycle(t *testing.T) {
 	}
 }
 
+// Importing credentials and configuring a rotation_trigger must not rotate
+// the live keys.
+func TestUnitBucketCredentials_importDoesNotRotate(t *testing.T) {
+	f := acctest.NewFake(t)
+	const name = "pidginhost_bucket_credentials.test"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: f.ProviderConfig() + bucketConfig("imp", 1, false)},
+			{
+				Config:       f.ProviderConfig() + credentialsConfig("imp", "v1"),
+				ResourceName: name,
+				ImportState:  true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					return acctest.AttrFromState(s, "pidginhost_bucket.test", "id")
+				},
+				ImportStatePersist: true,
+			},
+			{
+				Config:           f.ProviderConfig() + credentialsConfig("imp", "v1"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
+			},
+			{
+				// After adoption, changing the trigger rotates.
+				Config: f.ProviderConfig() + credentialsConfig("imp", "v2"),
+			},
+		},
+	})
+	if n := f.CountRequests("POST", "/credentials/rotate/"); n != 1 {
+		t.Fatalf("rotate called %d times, want 1 (only for the v1 -> v2 change)", n)
+	}
+}
+
 func TestAccBucketCredentials_basic(t *testing.T) {
 	bucket := acctest.RandomName("bkt")
 	const name = "pidginhost_bucket_credentials.test"

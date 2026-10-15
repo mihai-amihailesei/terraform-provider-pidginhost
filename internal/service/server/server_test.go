@@ -276,14 +276,19 @@ func TestUnitServer_provisioningFailure(t *testing.T) {
 
 // After import, create-only attributes can be added to the configuration
 // without replacing the server.
+//
+// The API reports the hostname as an FQDN and the package as a slug while
+// the configuration uses the short name and the package ID: neither may
+// cause a replacement or a modify-package call.
 func TestUnitServer_importThenConfigureCreateOnly(t *testing.T) {
 	f := acctest.NewFake(t)
-	id := f.CreateServer("imported", "debian-12", "cloud-xs")
+	id := f.CreateServer("imported.example.com", "debian-12", "cloud-xs")
 	cfg := f.ProviderConfig() + `
 resource "pidginhost_server" "test" {
   hostname  = "imported"
   image     = "debian-12"
-  package   = "cloud-xs"
+  package   = "11"
+  generation = "GEN2"
   new_ipv4  = true
   user_data = "#!/bin/sh\ntrue\n"
   password  = "s3cret-Passw0rd"
@@ -304,7 +309,22 @@ resource "pidginhost_server" "test" {
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
 					plancheck.ExpectResourceAction("pidginhost_server.test", plancheck.ResourceActionUpdate),
 				}},
-				Check: resource.TestCheckResourceAttr("pidginhost_server.test", "id", fmt.Sprint(id)),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("pidginhost_server.test", "id", fmt.Sprint(id)),
+					checkFake(f, func(f *fakeapi.Server) error {
+						if n := f.CountRequests("POST", "/modify-package/"); n != 0 {
+							return fmt.Errorf("modify-package called %d times for an unchanged package", n)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				// After that first update, changing the hostname for real replaces.
+				Config: strings.Replace(cfg, `hostname  = "imported"`, `hostname  = "renamed"`, 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("pidginhost_server.test", plancheck.ResourceActionDestroyBeforeCreate),
+				}},
 			},
 		},
 	})

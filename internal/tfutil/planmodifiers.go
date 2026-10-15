@@ -30,6 +30,20 @@ func MarkImported(ctx context.Context, resp *resource.ImportStateResponse) {
 	resp.Diagnostics.Append(resp.Private.SetKey(ctx, privateKeyImported, []byte("true"))...)
 }
 
+// ClearImported removes the import flag once an update has stored the
+// configured values, so later changes to create-only attributes replace the
+// resource as usual. Call it at the end of a successful Update.
+func ClearImported(ctx context.Context, resp *resource.UpdateResponse) {
+	if resp.Private == nil {
+		return
+	}
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, privateKeyImported, nil)...)
+}
+
+// WasImported reports whether the resource was imported and has not been
+// updated since.
+func WasImported(ctx context.Context, p privateGetter) bool { return wasImported(ctx, p) }
+
 type privateGetter interface {
 	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
 }
@@ -77,4 +91,21 @@ func RequiresReplaceIfDecreased() planmodifier.Int64 {
 		}
 		resp.RequiresReplace = req.PlanValue.ValueInt64() < req.StateValue.ValueInt64()
 	}, d, d)
+}
+
+// RequiresReplaceUnlessEquivalent forces replacement when a string changes,
+// unless same reports that the old and new values denote the same thing
+// (for example a short hostname and its FQDN), or the resource was just
+// imported, in which case the state holds the API's spelling and any
+// difference is assumed to be spelling only.
+func RequiresReplaceUnlessEquivalent(same func(a, b string) bool, desc string) planmodifier.String {
+	return stringplanmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+		if req.StateValue.IsNull() || req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
+			return
+		}
+		if wasImported(ctx, req.Private) || same(req.StateValue.ValueString(), req.PlanValue.ValueString()) {
+			return
+		}
+		resp.RequiresReplace = true
+	}, desc, desc)
 }

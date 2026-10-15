@@ -406,6 +406,11 @@ func (f *Server) withServer(w http.ResponseWriter, r *http.Request, fn func(*ser
 	fn(s)
 }
 
+// SetServerHostname changes how the API reports a server's hostname.
+func (f *Server) SetServerHostname(id int32, hostname string) {
+	f.Do(func() { f.servers[id].Hostname = hostname })
+}
+
 // CreateServer creates an active server directly in the fake, as if it had
 // been created outside Terraform. It returns the server ID.
 func (f *Server) CreateServer(hostname, imageSlug, packageSlug string) int32 {

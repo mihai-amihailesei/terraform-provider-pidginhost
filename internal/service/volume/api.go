@@ -71,6 +71,18 @@ func attachedServer(ctx context.Context, c *apiclient.Client, v *sdk.Volume, pri
 	if v.GetServer() == "" {
 		return 0, nil
 	}
+	// The server's volume list may lag behind an attach; if the volume
+	// names the prior server's hostname, trust it rather than searching by
+	// hostname (which is ambiguous when hostnames repeat).
+	if prior != 0 {
+		s, httpResp, err := c.Cloud().CloudServersRetrieve(ctx, prior).Execute()
+		if err != nil && !apiclient.IsNotFound(httpResp) {
+			return 0, fmt.Errorf("reading server %d: %s", prior, apiclient.ErrorDetail(err, httpResp))
+		}
+		if err == nil && strings.EqualFold(s.GetHostname(), v.GetServer()) {
+			return prior, nil
+		}
+	}
 	return findServerByHostname(ctx, c, v.GetServer())
 }
 

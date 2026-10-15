@@ -167,3 +167,11 @@ func (f *Server) volumeRoutes(mux *http.ServeMux) {
 		})
 	})
 }
+
+// CreateVolumeOn creates a volume attached to a server, outside Terraform.
+// product is stored verbatim, as the API would report it.
+func (f *Server) CreateVolumeOn(serverID int32, product string, size int, alias string) int32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.createVolume(serverID, product, size, alias, "").ID
+}

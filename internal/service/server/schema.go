@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -114,7 +115,9 @@ func serverSchema(ctx context.Context) schema.Schema {
 					"(the API cannot rename a server).",
 				Validators: []validator.String{stringvalidator.LengthBetween(1, 253)},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIfConfigured(), stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.UseStateForUnknown(),
+					tfutil.RequiresReplaceUnlessEquivalent(sameHostname,
+						"Changing the hostname replaces the server. A short name and its FQDN, or a different case, are equivalent."),
 				},
 			},
 			"image": schema.StringAttribute{
@@ -132,7 +135,10 @@ func serverSchema(ctx context.Context) schema.Schema {
 			"generation": schema.StringAttribute{
 				Optional: true, Computed: true,
 				MarkdownDescription: "*Create-only.* Hardware generation slug. When omitted, the API's default is used.",
-				PlanModifiers:       []planmodifier.String{tfutil.CreateOnlyString(), stringplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					tfutil.RequiresReplaceUnlessEquivalent(strings.EqualFold, "Changing the generation replaces the server."),
+				},
 			},
 			"project": schema.StringAttribute{
 				Optional: true, Computed: true,
@@ -144,7 +150,7 @@ func serverSchema(ctx context.Context) schema.Schema {
 				Optional: true, Computed: true,
 				MarkdownDescription: "*Create-only.* Enable high availability (automatic restart and migration on node failure). " +
 					"Reflects the API's `ha_enabled`.",
-				PlanModifiers: []planmodifier.Bool{tfutil.CreateOnlyBool(), boolplanmodifier.UseStateForUnknown()},
+				PlanModifiers: []planmodifier.Bool{boolplanmodifier.UseStateForUnknown(), tfutil.CreateOnlyBool()},
 			},
 			"password": schema.StringAttribute{
 				Optional: true, Sensitive: true,

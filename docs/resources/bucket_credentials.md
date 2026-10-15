@@ -47,7 +47,7 @@ output "backups_access_key" {
 
 ### Optional
 
-- `rotation_trigger` (String) Any string. Any change to it after creation (including setting or removing it) rotates the keys, for example `rotation_trigger = time_rotating.keys.id` or a date. Creating the resource never rotates.
+- `rotation_trigger` (String) Any string. Any change to it after creation (including setting or removing it) rotates the keys, for example `rotation_trigger = time_rotating.keys.id` or a date. Creating or importing the resource never rotates.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

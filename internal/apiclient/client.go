@@ -74,15 +74,15 @@ func New(cfg Config) (*Client, error) {
 		retries = 4
 	}
 
-	base := http.DefaultTransport
-	timeout := 2 * time.Minute
-	if cfg.HTTPClient != nil {
-		if cfg.HTTPClient.Transport != nil {
-			base = cfg.HTTPClient.Transport
-		}
-		if cfg.HTTPClient.Timeout != 0 {
-			timeout = cfg.HTTPClient.Timeout
-		}
+	// Each attempt is bounded by a response-header timeout rather than an
+	// http.Client.Timeout, which would also cover the retry waits (up to a
+	// minute per Retry-After) and cut throttled requests short. Every call
+	// is additionally bounded by the operation's context deadline.
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ResponseHeaderTimeout = 2 * time.Minute
+	var base http.RoundTripper = t
+	if cfg.HTTPClient != nil && cfg.HTTPClient.Transport != nil {
+		base = cfg.HTTPClient.Transport
 	}
 
 	sdkCfg := sdk.NewConfiguration()
@@ -92,7 +92,6 @@ func New(cfg Config) (*Client, error) {
 		sdkCfg.UserAgent = cfg.UserAgent
 	}
 	sdkCfg.HTTPClient = &http.Client{
-		Timeout:   timeout,
 		Transport: newLoggingTransport(newRetryTransport(base, retries)),
 	}
 

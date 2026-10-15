@@ -70,7 +70,7 @@ func (r *credentialsResource) Schema(ctx context.Context, _ resource.SchemaReque
 				Optional: true,
 				MarkdownDescription: "Any string. Any change to it after creation (including setting or removing it) " +
 					"rotates the keys, for example `rotation_trigger = time_rotating.keys.id` or a date. " +
-					"Creating the resource never rotates.",
+					"Creating or importing the resource never rotates.",
 			},
 			"access_key": schema.StringAttribute{
 				Computed: true, Sensitive: true, MarkdownDescription: "S3 access key ID.", PlanModifiers: stable,
@@ -105,7 +105,8 @@ func (r *credentialsResource) ModifyPlan(ctx context.Context, req resource.Modif
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if plan.RotationTrigger.IsUnknown() || rotates(state.RotationTrigger, plan.RotationTrigger) {
+	if plan.RotationTrigger.IsUnknown() ||
+		(rotates(state.RotationTrigger, plan.RotationTrigger) && !tfutil.WasImported(ctx, req.Private)) {
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("access_key"), types.StringUnknown())...)
 		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("secret_key"), types.StringUnknown())...)
 	}
@@ -198,7 +199,9 @@ func (r *credentialsResource) Update(ctx context.Context, req resource.UpdateReq
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	if rotates(state.RotationTrigger, plan.RotationTrigger) {
+	// Right after an import the trigger is unknown to the provider: adopt
+	// the configured value instead of rotating live keys.
+	if rotates(state.RotationTrigger, plan.RotationTrigger) && !tfutil.WasImported(ctx, req.Private) {
 		id, err := apiclient.ParseID(plan.BucketID.ValueString())
 		if err != nil {
 			tfutil.AddIDError(&resp.Diagnostics, err)
@@ -215,6 +218,7 @@ func (r *credentialsResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	tfutil.ClearImported(ctx, resp)
 }
 
 // Delete removes the credentials from state. The API has no way to revoke
@@ -229,4 +233,5 @@ func (r *credentialsResource) ImportState(ctx context.Context, req resource.Impo
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("bucket_id"), req.ID)...)
+	tfutil.MarkImported(ctx, resp)
 }

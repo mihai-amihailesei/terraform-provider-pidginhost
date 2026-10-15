@@ -32,7 +32,7 @@ resource "pidginhost_volume" "data" {
 
 ### Required
 
-- `product` (String) Storage product, as a slug (see `pidginhost_storage_products`) or ID. Changing it replaces the volume.
+- `product` (String) Storage product, as a slug (see `pidginhost_storage_products`) or ID. Changing it replaces the volume. The API's spelling of the product is not compared, so after `terraform import` the configured value is adopted without a replacement.
 - `server_id` (String) ID of the server the volume is created on and attached to. Changing it moves the volume to another server without losing data.
 - `size` (Number) Size in GB. Increasing it resizes the volume online; decreasing it replaces the volume.
 

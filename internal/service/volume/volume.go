@@ -71,8 +71,9 @@ func (r *volumeResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			"product": schema.StringAttribute{
 				Required: true,
 				MarkdownDescription: "Storage product, as a slug (see `pidginhost_storage_products`) or ID. " +
-					"Changing it replaces the volume.",
-				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
+					"Changing it replaces the volume. The API's spelling of the product is not compared, so after " +
+					"`terraform import` the configured value is adopted without a replacement.",
+				PlanModifiers: []planmodifier.String{tfutil.CreateOnlyString()},
 			},
 			"size": schema.Int64Attribute{
 				Required:            true,
@@ -139,12 +140,10 @@ func (r *volumeResource) refresh(ctx context.Context, m *volumeModel) (gone bool
 
 func applyVolume(m *volumeModel, v *sdk.Volume) {
 	m.ID = types.StringValue(apiclient.FormatID(v.GetId()))
-	// The product is returned as "ID or slug" without saying which. It cannot
-	// change after creation, so the configured spelling is kept; the API's
-	// value is only used after import.
-	if !tfutil.Known(m.Product) {
-		m.Product = types.StringValue(v.GetProduct())
-	}
+	// The product is returned as "ID or slug" without saying which, and it
+	// cannot change after creation, so it is never read back: comparing the
+	// API's spelling with the configuration could replace the volume and
+	// destroy its data.
 	m.Size = types.Int64Value(int64(v.GetSize()))
 	m.Alias = types.StringValue(v.GetAlias())
 	m.Project = types.StringValue(v.GetProject())
@@ -302,6 +301,7 @@ func (r *volumeResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	tfutil.ClearImported(ctx, resp)
 }
 
 func (r *volumeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -347,4 +347,5 @@ func (r *volumeResource) ImportState(ctx context.Context, req resource.ImportSta
 		return
 	}
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	tfutil.MarkImported(ctx, resp)
 }

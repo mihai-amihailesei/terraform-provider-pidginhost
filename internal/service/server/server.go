@@ -307,7 +307,9 @@ func applyDetail(ctx context.Context, m *serverModel, s *sdk.ServerDetail, diags
 		m.Hostname = types.StringValue(s.GetHostname())
 	}
 	if !tfutil.Known(m.Generation) {
-		m.Generation = tfutil.StringOrNull(s.GetGeneration())
+		// Store "" rather than null: UseStateForUnknown cannot carry a null
+		// prior value forward, which would make every later plan unknown.
+		m.Generation = types.StringValue(s.GetGeneration())
 	}
 
 	m.Project = types.StringValue(s.GetProject())
@@ -396,6 +398,16 @@ func (r *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 			return
 		}
 	}
+	// Applying a non-empty SSH key reboots a running server. Wait until it
+	// is running again so the power state read below matches the plan.
+	keyChanged := tfutil.Known(plan.SSHPublicKey) && plan.SSHPublicKey.ValueString() != "" &&
+		!tfutil.SameText(plan.SSHPublicKey.ValueString(), state.SSHPublicKey.ValueString())
+	if keyChanged && state.PowerState.ValueString() == powerRunning {
+		if err := waitForPower(ctx, r.Client, id, powerRunning); err != nil {
+			resp.Diagnostics.AddError("Server did not come back after applying the SSH key", err.Error())
+			return
+		}
+	}
 
 	// Package: POST modify-package, then wait for the resize to finish.
 	//
@@ -404,7 +416,18 @@ func (r *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 	// server must be stopped first or how long the change takes. The
 	// provider waits for the status to return to "active" and then checks
 	// that the package changed.
-	if !plan.Package.Equal(state.Package) {
+	packageChanged := !plan.Package.Equal(state.Package)
+	if packageChanged {
+		// After an import the state holds the API's spelling of the package;
+		// do not resize a server to the package it already has.
+		same, err := samePackage(ctx, r.Client, plan.Package.ValueString(), state.Package.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Error comparing server packages", err.Error())
+			return
+		}
+		packageChanged = !same
+	}
+	if packageChanged {
 		_, httpResp, err := r.Client.Cloud().CloudServersModifyPackageCreate(ctx, id).
 			ServerProductUpgradeRequest(*sdk.NewServerProductUpgradeRequest(plan.Package.ValueString())).Execute()
 		if err != nil {
@@ -464,6 +487,7 @@ func (r *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	tfutil.ClearImported(ctx, resp)
 }
 
 func (r *serverResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

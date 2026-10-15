@@ -5,6 +5,7 @@ package volume_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -81,7 +82,7 @@ func TestUnitVolume_lifecycle(t *testing.T) {
 				ResourceName:            name,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"timeouts"},
+				ImportStateVerifyIgnore: []string{"timeouts", "product"},
 			},
 			{
 				// Detached outside Terraform: re-attached in place.
@@ -145,6 +146,45 @@ func TestAccVolume_basic(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"timeouts", "product"},
+			},
+		},
+	})
+}
+
+// After import, a product given in another spelling (the API reports the ID
+// "21", the configuration says "ssd") must be adopted, never trigger a
+// replacement that would destroy the volume's data.
+func TestUnitVolume_importAdoptsProduct(t *testing.T) {
+	f := acctest.NewFake(t)
+	srv := f.CreateServer("vol-imp", "debian-12", "cloud-xs")
+	vid := f.CreateVolumeOn(srv, "21", 20, "data")
+	cfg := f.ProviderConfig() + fmt.Sprintf(`
+resource "pidginhost_volume" "test" {
+  server_id = "%d"
+  product   = "ssd"
+  size      = 20
+  alias     = "data"
+}
+`, srv)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg,
+				ResourceName:       "pidginhost_volume.test",
+				ImportState:        true,
+				ImportStateId:      fmt.Sprint(vid),
+				ImportStatePersist: true,
+			},
+			{
+				Config:           cfg,
+				ConfigPlanChecks: action("pidginhost_volume.test", plancheck.ResourceActionUpdate),
+				Check:            resource.TestCheckResourceAttr("pidginhost_volume.test", "id", fmt.Sprint(vid)),
+			},
+			{
+				// Once adopted, changing the product replaces as usual.
+				Config:           strings.Replace(cfg, `"ssd"`, `"hdd"`, 1),
+				ConfigPlanChecks: action("pidginhost_volume.test", plancheck.ResourceActionDestroyBeforeCreate),
 			},
 		},
 	})

@@ -17,6 +17,8 @@ func Resources() []func() resource.Resource {
 		NewIPv6Resource,
 		NewIPv4AttachmentResource,
 		NewIPv6AttachmentResource,
+		NewFloatingIPv4Resource,
+		NewFloatingIPv6Resource,
 	}
 }
 

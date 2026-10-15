@@ -6,10 +6,15 @@ package fakeapi
 import "net/http"
 
 // state holds the fake's resources, one map per resource type.
-type state struct{}
+type state struct {
+	sshKeys map[int32]*sshKey
+}
 
-func (f *Server) initState() {}
+func (f *Server) initState() {
+	f.sshKeys = map[int32]*sshKey{}
+}
 
 func (f *Server) routes(mux *http.ServeMux) {
 	f.catalogRoutes(mux)
+	f.sshKeyRoutes(mux)
 }

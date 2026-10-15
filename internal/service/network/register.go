@@ -10,7 +10,9 @@ import (
 
 // Resources returns the resources of this service.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		NewPrivateNetworkResource,
+	}
 }
 
 // DataSources returns the data sources of this service.

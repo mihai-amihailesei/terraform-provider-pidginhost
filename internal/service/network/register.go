@@ -12,6 +12,7 @@ import (
 func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		NewPrivateNetworkResource,
+		NewPrivateNetworkAttachmentResource,
 	}
 }
 

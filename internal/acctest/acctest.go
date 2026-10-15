@@ -147,3 +147,29 @@ locals {
 }
 `, os.Getenv(EnvImage), os.Getenv(EnvPackage), os.Getenv(EnvPackageUpgrade), os.Getenv(EnvStorageProduct))
 }
+
+// FakeServerConfig declares a pidginhost_server resource named name for use
+// against the fake API.
+func FakeServerConfig(name, hostname string) string {
+	return fmt.Sprintf(`
+resource "pidginhost_server" %q {
+  hostname = %q
+  image    = "debian-12"
+  package  = "cloud-xs"
+  new_ipv4 = true
+}
+`, name, hostname)
+}
+
+// AccServerConfig declares the cheapest possible pidginhost_server resource
+// named name. It needs CatalogConfig in the same configuration.
+func AccServerConfig(name, hostname string) string {
+	return fmt.Sprintf(`
+resource "pidginhost_server" %q {
+  hostname = %q
+  image    = local.acc_image
+  package  = local.acc_package
+  new_ipv4 = true
+}
+`, name, hostname)
+}

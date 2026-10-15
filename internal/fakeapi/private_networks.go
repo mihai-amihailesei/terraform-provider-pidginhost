@@ -92,6 +92,45 @@ func (f *Server) privateNetworkRoutes(mux *http.ServeMux) {
 			writeJSON(w, http.StatusOK, n.json(f))
 		})
 	})
+	mux.HandleFunc("POST /api/cloud/private-networks/{id}/add-server/{$}", func(w http.ResponseWriter, r *http.Request) {
+		f.withPrivateNetwork(w, r, func(n *privateNetwork) {
+			b := bodyOf(r)
+			host, _ := str(b, "server")
+			var sid int32
+			for id, s := range f.servers {
+				if s.Hostname == host {
+					sid = id
+				}
+			}
+			if sid == 0 {
+				badRequest(w, "server", "Server not found.")
+				return
+			}
+			if _, ok := n.Members[sid]; ok {
+				badRequest(w, "server", "The server is already in this network.")
+				return
+			}
+			addr, _ := str(b, "address")
+			if addr == "" {
+				addr = n.nextAddress()
+			}
+			n.Members[sid] = addr
+			writeJSON(w, http.StatusOK, map[string]any{"created": true})
+		})
+	})
+	mux.HandleFunc("POST /api/cloud/private-networks/{id}/remove-server/{$}", func(w http.ResponseWriter, r *http.Request) {
+		f.withPrivateNetwork(w, r, func(n *privateNetwork) {
+			ref, _ := str(bodyOf(r), "server")
+			for sid, addr := range n.Members {
+				if addr == ref || f.hostnameOf(sid) == ref {
+					delete(n.Members, sid)
+					writeJSON(w, http.StatusOK, map[string]any{"removed": true})
+					return
+				}
+			}
+			badRequest(w, "server", "The server is not in this network.")
+		})
+	})
 	mux.HandleFunc("DELETE /api/cloud/private-networks/{id}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		f.withPrivateNetwork(w, r, func(n *privateNetwork) {
 			if len(n.Members) > 0 {
@@ -150,4 +189,9 @@ func (f *Server) serverPrivateInterfaces(sid int32) []any {
 		}
 	}
 	return out
+}
+
+// RemoveFromPrivateNetwork removes a server from a network out of band.
+func (f *Server) RemoveFromPrivateNetwork(networkID, serverID int32) {
+	f.Do(func() { delete(f.privateNets[networkID].Members, serverID) })
 }

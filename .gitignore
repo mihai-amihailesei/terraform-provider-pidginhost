@@ -1,0 +1,26 @@
+# Build output
+/bin/
+/dist/
+terraform-provider-pidginhost
+terraform-provider-pidginhost_*
+
+# Terraform / OpenTofu working files
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!examples/**/*.tfvars.example
+crash.log
+.terraformrc
+terraform.rc
+dev.tfrc
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Test output
+coverage.out

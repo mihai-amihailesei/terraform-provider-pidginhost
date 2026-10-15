@@ -8,7 +8,7 @@ BINARY      := terraform-provider-pidginhost
 ACC_TIMEOUT ?= 120m
 TESTARGS    ?=
 
-.PHONY: default build install fmt lint test testacc check-token sweep docs docs-check tidy
+.PHONY: default build install fmt lint test testacc testacc-fake check-token sweep docs docs-check tidy
 
 default: build
 
@@ -39,6 +39,11 @@ test:
 # Every acceptance test. Costs money.
 testacc: check-token
 	TF_ACC=1 go test ./internal/... -count=1 -v -run '^TestAcc' -timeout $(ACC_TIMEOUT) $(TESTARGS)
+
+# Runs every acceptance test against the in-memory fake API. Free, and needs
+# no token: it checks the acceptance tests themselves, not the real API.
+testacc-fake:
+	TF_ACC=1 PIDGINHOST_ACC_FAKE=1 PIDGINHOST_TOKEN= go test ./internal/... -count=1 -run '^TestAcc' -timeout 30m $(TESTARGS)
 
 check-token:
 	@test -n "$$PIDGINHOST_TOKEN" || (echo "PIDGINHOST_TOKEN is not set" >&2; exit 1)

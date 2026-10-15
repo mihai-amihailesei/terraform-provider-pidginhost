@@ -104,3 +104,7 @@ jobs:
       - run: go test ./... -count=1 -timeout 15m
         env:
           CHECKPOINT_DISABLE: "1"
+      - name: Acceptance tests against the fake API
+        run: make testacc-fake
+        env:
+          CHECKPOINT_DISABLE: "1"

@@ -47,12 +47,23 @@ const (
 	// EnvStorageProduct overrides the storage product (ID or slug) used for
 	// volumes. By default the first product is used.
 	EnvStorageProduct = "PIDGINHOST_ACC_STORAGE_PRODUCT"
+	// EnvFake, when "1", runs the acceptance tests against the in-memory
+	// fake API instead of the real one. It costs nothing and checks the
+	// tests themselves; it proves nothing about the real API.
+	EnvFake = "PIDGINHOST_ACC_FAKE"
 )
 
 // ProviderFactories serves the real provider, configured from the
 // environment (PIDGINHOST_TOKEN, PIDGINHOST_API_URL).
 var ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"pidginhost": providerserver.NewProtocol6WithError(provider.New("test")()),
+	"pidginhost": providerserver.NewProtocol6WithError(provider.New("test", accOptions()...)()),
+}
+
+func accOptions() []provider.Option {
+	if os.Getenv(EnvFake) == "1" {
+		return []provider.Option{provider.WithPollInterval(10 * time.Millisecond)}
+	}
+	return nil
 }
 
 // FakeProviderFactories serves the provider with fast polling, for use with
@@ -63,8 +74,15 @@ var FakeProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 }
 
 // PreCheck fails the test early when acceptance-test credentials are missing.
+// With PIDGINHOST_ACC_FAKE=1 it starts a fake API for the test instead.
 func PreCheck(t *testing.T) {
 	t.Helper()
+	if os.Getenv(EnvFake) == "1" {
+		f := fakeapi.New(t)
+		t.Setenv(provider.EnvToken, fakeapi.Token)
+		t.Setenv(provider.EnvAPIURL, f.URL)
+		return
+	}
 	if os.Getenv(provider.EnvToken) == "" {
 		t.Fatalf("%s must be set for acceptance tests", provider.EnvToken)
 	}
@@ -144,6 +162,10 @@ locals {
   acc_package_upgrade  = local.acc_package_upgrade_override != "" ? local.acc_package_upgrade_override : local.acc_sorted_packages[1]
 
   acc_storage_product = local.acc_storage_override != "" ? local.acc_storage_override : data.pidginhost_storage_products.all.products[0].slug
+  acc_storage_min     = one([for p in data.pidginhost_storage_products.all.products : p.min_size if p.slug == local.acc_storage_product || p.id == local.acc_storage_product])
+  # Smallest volume the product allows, and a slightly larger one for resize tests.
+  acc_volume_size       = max(local.acc_storage_min, 1)
+  acc_volume_size_grown = local.acc_volume_size + 10
 }
 `, os.Getenv(EnvImage), os.Getenv(EnvPackage), os.Getenv(EnvPackageUpgrade), os.Getenv(EnvStorageProduct))
 }

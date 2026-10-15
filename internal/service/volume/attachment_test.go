@@ -92,7 +92,7 @@ func TestAccVolumeAttachment_basic(t *testing.T) {
 resource "pidginhost_volume" "test" {
   server_id = pidginhost_server.b.id
   product   = local.acc_storage_product
-  size      = 10
+  size      = local.acc_volume_size
   alias     = %q
 }
 `, acctest.RandomName("va"))

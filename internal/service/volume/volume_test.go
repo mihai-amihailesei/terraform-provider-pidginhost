@@ -14,12 +14,12 @@ import (
 	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
 )
 
-func volumeConfig(server, product string, size int, alias string) string {
+func volumeConfig(server, product string, size any, alias string) string {
 	return fmt.Sprintf(`
 resource "pidginhost_volume" "test" {
   server_id = pidginhost_server.%s.id
   product   = %s
-  size      = %d
+  size      = %v
   alias     = %q
 }
 `, server, product, size, alias)
@@ -110,6 +110,7 @@ func TestUnitVolume_lifecycle(t *testing.T) {
 
 func TestAccVolume_basic(t *testing.T) {
 	alias := acctest.RandomName("vol")
+	var initialSize int
 	base := acctest.CatalogConfig() + acctest.AccServerConfig("a", acctest.RandomName("vol"))
 	const name = "pidginhost_volume.test"
 	resource.Test(t, resource.TestCase{
@@ -117,14 +118,25 @@ func TestAccVolume_basic(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: base + volumeConfig("a", "local.acc_storage_product", 10, alias),
-				Check:  resource.TestCheckResourceAttr(name, "attached", "true"),
+				Config: base + volumeConfig("a", "local.acc_storage_product", "local.acc_volume_size", alias),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(name, "attached", "true"),
+					resource.TestCheckResourceAttrWith(name, "size", func(v string) (err error) {
+						_, err = fmt.Sscan(v, &initialSize)
+						return err
+					}),
+				),
 			},
 			{
-				Config:           base + volumeConfig("a", "local.acc_storage_product", 20, alias+"-2"),
+				Config:           base + volumeConfig("a", "local.acc_storage_product", "local.acc_volume_size_grown", alias+"-2"),
 				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(name, "size", "20"),
+					resource.TestCheckResourceAttrWith(name, "size", func(v string) error {
+						if v != fmt.Sprint(initialSize+10) {
+							return fmt.Errorf("size = %s, want %d", v, initialSize+10)
+						}
+						return nil
+					}),
 					resource.TestCheckResourceAttr(name, "alias", alias+"-2"),
 				),
 			},

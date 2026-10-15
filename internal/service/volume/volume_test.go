@@ -1,0 +1,139 @@
+// Copyright (c) The terraform-provider-pidginhost authors
+// SPDX-License-Identifier: MPL-2.0
+
+package volume_test
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+
+	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
+)
+
+func volumeConfig(server, product string, size int, alias string) string {
+	return fmt.Sprintf(`
+resource "pidginhost_volume" "test" {
+  server_id = pidginhost_server.%s.id
+  product   = %s
+  size      = %d
+  alias     = %q
+}
+`, server, product, size, alias)
+}
+
+func action(name string, a plancheck.ResourceActionType) resource.ConfigPlanChecks {
+	return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(name, a)}}
+}
+
+func TestUnitVolume_lifecycle(t *testing.T) {
+	f := acctest.NewFake(t)
+	servers := f.ProviderConfig() + acctest.FakeServerConfig("a", "vol-a") + acctest.FakeServerConfig("b", "vol-b")
+	const name = "pidginhost_volume.test"
+	var firstID string
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: servers + volumeConfig("a", `"ssd"`, 20, "data"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(name, "size", "20"),
+					resource.TestCheckResourceAttr(name, "attached", "true"),
+					resource.TestCheckResourceAttr(name, "server_hostname", "vol-a"),
+					resource.TestCheckResourceAttrPair(name, "server_id", "pidginhost_server.a", "id"),
+					func(s *terraform.State) (err error) { firstID, err = acctest.AttrFromState(s, name, "id"); return },
+				),
+			},
+			{
+				// Growing and renaming: in place.
+				Config:           servers + volumeConfig("a", `"ssd"`, 30, "data-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(name, "size", "30"),
+					resource.TestCheckResourceAttr(name, "alias", "data-2"),
+					resource.TestCheckResourceAttrWith(name, "id", func(v string) error {
+						if v != firstID {
+							return fmt.Errorf("volume was replaced: %s -> %s", firstID, v)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				// Moving to another server: in place, same volume.
+				Config:           servers + volumeConfig("b", `"ssd"`, 30, "data-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(name, "server_hostname", "vol-b"),
+					resource.TestCheckResourceAttrPair(name, "server_id", "pidginhost_server.b", "id"),
+					resource.TestCheckResourceAttrWith(name, "id", func(v string) error {
+						if v != firstID {
+							return fmt.Errorf("volume was replaced: %s -> %s", firstID, v)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				ResourceName:            name,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"timeouts"},
+			},
+			{
+				// Detached outside Terraform: re-attached in place.
+				PreConfig: func() {
+					for _, id := range f.VolumeIDs() {
+						f.DetachVolume(id)
+					}
+				},
+				Config:           servers + volumeConfig("b", `"ssd"`, 30, "data-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
+				Check:            resource.TestCheckResourceAttr(name, "attached", "true"),
+			},
+			{
+				// Shrinking is impossible: replacement.
+				Config:           servers + volumeConfig("b", `"ssd"`, 20, "data-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionDestroyBeforeCreate),
+			},
+			{
+				// So is changing the product.
+				Config:           servers + volumeConfig("b", `"hdd"`, 50, "data-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionDestroyBeforeCreate),
+			},
+		},
+	})
+}
+
+func TestAccVolume_basic(t *testing.T) {
+	alias := acctest.RandomName("vol")
+	base := acctest.CatalogConfig() + acctest.AccServerConfig("a", acctest.RandomName("vol"))
+	const name = "pidginhost_volume.test"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(t) },
+		ProtoV6ProviderFactories: acctest.ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: base + volumeConfig("a", "local.acc_storage_product", 10, alias),
+				Check:  resource.TestCheckResourceAttr(name, "attached", "true"),
+			},
+			{
+				Config:           base + volumeConfig("a", "local.acc_storage_product", 20, alias+"-2"),
+				ConfigPlanChecks: action(name, plancheck.ResourceActionUpdate),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(name, "size", "20"),
+					resource.TestCheckResourceAttr(name, "alias", alias+"-2"),
+				),
+			},
+			{
+				ResourceName:            name,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"timeouts", "product"},
+			},
+		},
+	})
+}

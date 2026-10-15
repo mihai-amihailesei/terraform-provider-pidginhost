@@ -15,6 +15,7 @@ type state struct {
 	ipv6s       map[int32]*publicIP
 	floatingV4  map[int32]*floatingIP
 	floatingV6  map[int32]*floatingIP
+	volumes     map[int32]*volume
 }
 
 func (f *Server) initState() {
@@ -26,6 +27,7 @@ func (f *Server) initState() {
 	f.ipv6s = map[int32]*publicIP{}
 	f.floatingV4 = map[int32]*floatingIP{}
 	f.floatingV6 = map[int32]*floatingIP{}
+	f.volumes = map[int32]*volume{}
 }
 
 func (f *Server) routes(mux *http.ServeMux) {
@@ -36,16 +38,21 @@ func (f *Server) routes(mux *http.ServeMux) {
 	f.serverRoutes(mux)
 	f.ipRoutes(mux)
 	f.floatingRoutes(mux)
+	f.volumeRoutes(mux)
 }
 
-// Hooks filled in by resources added to the fake later.
-
-func (f *Server) serverVolumes(int32) []any { return []any{} }
+// onServerRemovedExtra releases floating IP authorizations and volumes of a
+// deleted server.
 func (f *Server) onServerRemovedExtra(sid int32) {
 	for _, store := range []map[int32]*floatingIP{f.floatingV4, f.floatingV6} {
 		for _, ip := range store {
 			delete(ip.Authorized, sid)
 		}
 	}
+	// Volumes of a deleted server are detached, not deleted.
+	for _, v := range f.volumes {
+		if v.ServerID == sid {
+			v.ServerID = 0
+		}
+	}
 }
-func (f *Server) createVolume(_ int32, _ string, _ int, _, _ string) {}

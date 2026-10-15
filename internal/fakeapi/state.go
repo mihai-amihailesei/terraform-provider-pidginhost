@@ -7,14 +7,21 @@ import "net/http"
 
 // state holds the fake's resources, one map per resource type.
 type state struct {
-	sshKeys map[int32]*sshKey
+	sshKeys  map[int32]*sshKey
+	ruleSets map[int32]*ruleSet
 }
 
 func (f *Server) initState() {
 	f.sshKeys = map[int32]*sshKey{}
+	f.ruleSets = map[int32]*ruleSet{}
 }
 
 func (f *Server) routes(mux *http.ServeMux) {
 	f.catalogRoutes(mux)
 	f.sshKeyRoutes(mux)
+	f.firewallRoutes(mux)
 }
+
+// ruleSetInUse reports whether a server uses the rule set. Servers are
+// added to the fake in a later file; until then nothing uses a set.
+func (f *Server) ruleSetInUse(int32) bool { return false }

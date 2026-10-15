@@ -10,7 +10,9 @@ import (
 
 // Resources returns the resources of this service.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		NewRulesSetResource,
+	}
 }
 
 // DataSources returns the data sources of this service.

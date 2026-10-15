@@ -10,12 +10,18 @@ type state struct {
 	sshKeys     map[int32]*sshKey
 	ruleSets    map[int32]*ruleSet
 	privateNets map[int32]*privateNetwork
+	servers     map[int32]*server
+	ipv4s       map[int32]*publicIP
+	ipv6s       map[int32]*publicIP
 }
 
 func (f *Server) initState() {
 	f.sshKeys = map[int32]*sshKey{}
 	f.ruleSets = map[int32]*ruleSet{}
 	f.privateNets = map[int32]*privateNetwork{}
+	f.servers = map[int32]*server{}
+	f.ipv4s = map[int32]*publicIP{}
+	f.ipv6s = map[int32]*publicIP{}
 }
 
 func (f *Server) routes(mux *http.ServeMux) {
@@ -23,12 +29,12 @@ func (f *Server) routes(mux *http.ServeMux) {
 	f.sshKeyRoutes(mux)
 	f.firewallRoutes(mux)
 	f.privateNetworkRoutes(mux)
+	f.serverRoutes(mux)
 }
 
-// ruleSetInUse reports whether a server uses the rule set. Servers are
-// added to the fake in a later file; until then nothing uses a set.
-func (f *Server) ruleSetInUse(int32) bool { return false }
+// Hooks filled in by resources added to the fake later.
 
-// hostnameOf returns the hostname of a server. Servers are added to the
-// fake in a later file.
-func (f *Server) hostnameOf(int32) string { return "" }
+func (f *Server) serverVolumes(int32) []any                          { return []any{} }
+func (f *Server) serverFloatingIPs(int32) []any                      { return []any{} }
+func (f *Server) onServerRemovedExtra(int32)                         {}
+func (f *Server) createVolume(_ int32, _ string, _ int, _, _ string) {}

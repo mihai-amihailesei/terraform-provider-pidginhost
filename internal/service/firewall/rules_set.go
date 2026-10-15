@@ -8,6 +8,8 @@ package firewall
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -180,9 +182,77 @@ func (r *rulesSetResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 	httpResp, err := r.Client.Cloud().CloudFirewallRulesSetDestroy(ctx, id).Execute()
+	if err == nil || apiclient.IsNotFound(httpResp) {
+		return
+	}
+	code := apiclient.StatusCode(httpResp)
+	if code != http.StatusBadRequest && code != http.StatusConflict {
+		tfutil.AddAPIError(&resp.Diagnostics, "Error deleting firewall rule set", err, httpResp)
+		return
+	}
+
+	// The API refuses to delete a set that a server still uses. Terraform
+	// deletes a dependency before it updates the resources that stopped
+	// referencing it, so when a configuration removes a set and its
+	// firewall_rules_set_id reference in the same apply, the set is still
+	// attached here. Detach it from the servers that use it, then delete it;
+	// the server update that follows applies whatever the configuration says.
+	//
+	// Assumption: the spec lists only 204 for this DELETE, so the status code
+	// for "set in use" is not documented; 400 and 409 are treated as such.
+	detached, derr := detachFromServers(ctx, r.Client, id, state.Name.ValueString())
+	if derr != nil {
+		resp.Diagnostics.AddError("Error deleting firewall rule set",
+			fmt.Sprintf("%s\n\nDetaching the set from servers that use it failed: %s", apiclient.ErrorDetail(err, httpResp), derr))
+		return
+	}
+	if len(detached) == 0 {
+		tfutil.AddAPIError(&resp.Diagnostics, "Error deleting firewall rule set", err, httpResp)
+		return
+	}
+	resp.Diagnostics.AddWarning("Firewall rule set detached from servers before deletion",
+		fmt.Sprintf("Rule set %d was still applied to server(s) %v and was detached from them so it could be deleted.",
+			id, detached))
+	httpResp, err = r.Client.Cloud().CloudFirewallRulesSetDestroy(ctx, id).Execute()
 	if err != nil && !apiclient.IsNotFound(httpResp) {
 		tfutil.AddAPIError(&resp.Diagnostics, "Error deleting firewall rule set", err, httpResp)
 	}
+}
+
+// detachFromServers removes rule set id from the public interface of every
+// server that uses it and returns the IDs of those servers.
+func detachFromServers(ctx context.Context, c *apiclient.Client, id int32, name string) ([]int32, error) {
+	servers, err := apiclient.ListAll(ctx, func(ctx context.Context, page int32) ([]sdk.Server, bool, *http.Response, error) {
+		res, httpResp, err := c.Cloud().CloudServersList(ctx).Page(page).Execute()
+		if err != nil {
+			return nil, false, httpResp, err
+		}
+		return res.GetResults(), res.GetNext() != "", httpResp, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	want := apiclient.FormatID(id)
+	var detached []int32
+	for _, s := range servers {
+		pi, httpResp, err := c.Cloud().CloudServersPublicInterfaceRetrieve(ctx, s.GetId()).Execute()
+		if apiclient.IsNotFound(httpResp) {
+			continue
+		}
+		if err != nil {
+			return detached, fmt.Errorf("reading public interface of server %d: %s", s.GetId(), apiclient.ErrorDetail(err, httpResp))
+		}
+		if got := pi.GetFwRulesSet(); got == "" || (got != want && got != name) {
+			continue
+		}
+		body := sdk.NewPublicInterfaceRequest()
+		body.SetFwRulesSetNil() // an absent field would leave the set attached
+		if _, httpResp, err := c.Cloud().CloudServersPublicInterfaceCreate(ctx, s.GetId()).PublicInterfaceRequest(*body).Execute(); err != nil {
+			return detached, fmt.Errorf("detaching from server %d: %s", s.GetId(), apiclient.ErrorDetail(err, httpResp))
+		}
+		detached = append(detached, s.GetId())
+	}
+	return detached, nil
 }
 
 func (r *rulesSetResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

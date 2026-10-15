@@ -10,10 +10,14 @@ import (
 
 // Resources returns the resources of this service.
 func Resources() []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		NewServerResource,
+	}
 }
 
 // DataSources returns the data sources of this service.
 func DataSources() []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		NewServerDataSource,
+	}
 }

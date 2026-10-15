@@ -4,6 +4,7 @@
 package fakeapi
 
 import (
+	"fmt"
 	"net/http"
 	"net/netip"
 )
@@ -113,4 +114,40 @@ func (f *Server) withPrivateNetwork(w http.ResponseWriter, r *http.Request, fn f
 		return
 	}
 	fn(n)
+}
+
+// nextAddress returns the first free host address in the network.
+func (n *privateNetwork) nextAddress() string {
+	p, err := netip.ParsePrefix(n.Address)
+	if err != nil {
+		return ""
+	}
+	used := map[string]bool{}
+	for _, a := range n.Members {
+		used[a] = true
+	}
+	if n.Gateway != nil {
+		used[*n.Gateway] = true
+	}
+	for a := p.Addr().Next(); p.Contains(a); a = a.Next() {
+		if !used[a.String()] {
+			return a.String()
+		}
+	}
+	return ""
+}
+
+// serverPrivateInterfaces lists a server's private interfaces in the shape
+// of ServerPrivateInterface.
+func (f *Server) serverPrivateInterfaces(sid int32) []any {
+	out := []any{}
+	i := 0
+	for _, id := range sortedKeys(f.privateNets) {
+		pn := f.privateNets[id]
+		if addr, ok := pn.Members[sid]; ok {
+			out = append(out, map[string]any{"interface": fmt.Sprintf("eth%d", i+1), "address": addr, "network": pn.Address})
+			i++
+		}
+	}
+	return out
 }

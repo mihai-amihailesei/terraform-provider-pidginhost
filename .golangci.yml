@@ -1,0 +1,44 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  # bodyclose is not enabled: the generated SDK reads and closes every
+  # response body itself and hands back an in-memory copy.
+  enable:
+    - copyloopvar
+    - errorlint
+    - gocritic
+    - misspell
+    - nilerr
+    - predeclared
+    - revive
+    - unconvert
+    - unparam
+    - usetesting
+    - whitespace
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: indent-error-flow
+        - name: errorf
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mihai-amihailesei/pidgin-host

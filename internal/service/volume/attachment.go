@@ -102,7 +102,7 @@ func (r *attachmentResource) Create(ctx context.Context, req resource.CreateRequ
 		return
 	}
 	if v.GetAttached() {
-		has, _, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
+		has, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
 		if err != nil {
 			resp.Diagnostics.AddError("Error reading server", err.Error())
 			return
@@ -137,7 +137,7 @@ func (r *attachmentResource) Read(ctx context.Context, req resource.ReadRequest,
 		tfutil.AddIDError(&resp.Diagnostics, err)
 		return
 	}
-	has, _, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
+	has, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading volume attachment", err.Error())
 		return
@@ -170,7 +170,7 @@ func (r *attachmentResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	// Only detach if the volume is still on this server.
-	has, _, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
+	has, err := serverHasVolume(ctx, r.Client, serverID, volumeID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading volume attachment", err.Error())
 		return

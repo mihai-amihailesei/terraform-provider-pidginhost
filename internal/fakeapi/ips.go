@@ -173,7 +173,6 @@ func (f *Server) ipRoutes(mux *http.ServeMux) {
 		name string
 		v6   bool
 	}{{"ipv4", false}, {"ipv6", true}} {
-		fam := fam
 		base := "/api/cloud/" + fam.name + "/"
 		with := func(w http.ResponseWriter, r *http.Request, fn func(ip *publicIP)) {
 			id, ok := pathID(r, "id")

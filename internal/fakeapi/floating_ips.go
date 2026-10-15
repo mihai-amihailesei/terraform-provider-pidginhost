@@ -71,7 +71,6 @@ func (f *Server) floatingRoutes(mux *http.ServeMux) {
 		name string
 		v6   bool
 	}{{"floating-ipv4", false}, {"floating-ipv6", true}} {
-		fam := fam
 		base := "/api/cloud/" + fam.name + "/"
 		with := func(w http.ResponseWriter, r *http.Request, fn func(ip *floatingIP)) {
 			id, ok := pathID(r, "id")

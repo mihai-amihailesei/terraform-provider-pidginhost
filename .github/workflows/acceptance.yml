@@ -1,0 +1,70 @@
+name: Acceptance tests
+
+# Creates real, billable resources in the Pidgin Host account whose token is
+# stored in the PIDGINHOST_TOKEN repository secret. Run manually only.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: >-
+          Make target suffix: "all" runs every acceptance test; otherwise the
+          part after "testacc-", e.g. "server", "bucket", "volume-attachment".
+        required: true
+        default: all
+      cli:
+        description: CLI to run the tests with
+        type: choice
+        options: [terraform, tofu]
+        default: terraform
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never run two acceptance runs against the same account at once.
+  group: acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - if: inputs.cli == 'terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - if: inputs.cli == 'tofu'
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_wrapper: false
+      - name: Select CLI
+        run: |
+          echo "TF_ACC_TERRAFORM_PATH=$(command -v ${{ inputs.cli }})" >> "$GITHUB_ENV"
+          if [ "${{ inputs.cli }}" = "tofu" ]; then
+            echo "TF_ACC_PROVIDER_HOST=registry.opentofu.org" >> "$GITHUB_ENV"
+          fi
+      - name: Validate target
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          case "$TARGET" in
+            all) echo "MAKE_TARGET=testacc" >> "$GITHUB_ENV" ;;
+            *[!a-z0-9-]*|"") echo "::error::invalid target"; exit 1 ;;
+            *) echo "MAKE_TARGET=testacc-$TARGET" >> "$GITHUB_ENV" ;;
+          esac
+      - name: Run acceptance tests
+        run: make "$MAKE_TARGET"
+        env:
+          PIDGINHOST_TOKEN: ${{ secrets.PIDGINHOST_TOKEN }}
+          CHECKPOINT_DISABLE: "1"
+      - name: Sweep leftover tfacc- resources
+        if: always()
+        run: make sweep
+        env:
+          PIDGINHOST_TOKEN: ${{ secrets.PIDGINHOST_TOKEN }}

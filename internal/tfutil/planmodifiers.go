@@ -49,21 +49,21 @@ const createOnlyDesc = "Changing this value after creation replaces the resource
 // the prior state value is null because the resource was imported.
 func CreateOnlyString() planmodifier.String {
 	return stringplanmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !(req.StateValue.IsNull() && wasImported(ctx, req.Private))
+		resp.RequiresReplace = !req.StateValue.IsNull() || !wasImported(ctx, req.Private)
 	}, createOnlyDesc, createOnlyDesc)
 }
 
 // CreateOnlyBool is the bool variant of CreateOnlyString.
 func CreateOnlyBool() planmodifier.Bool {
 	return boolplanmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !(req.StateValue.IsNull() && wasImported(ctx, req.Private))
+		resp.RequiresReplace = !req.StateValue.IsNull() || !wasImported(ctx, req.Private)
 	}, createOnlyDesc, createOnlyDesc)
 }
 
 // CreateOnlyInt64 is the int64 variant of CreateOnlyString.
 func CreateOnlyInt64() planmodifier.Int64 {
 	return int64planmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.Int64Request, resp *int64planmodifier.RequiresReplaceIfFuncResponse) {
-		resp.RequiresReplace = !(req.StateValue.IsNull() && wasImported(ctx, req.Private))
+		resp.RequiresReplace = !req.StateValue.IsNull() || !wasImported(ctx, req.Private)
 	}, createOnlyDesc, createOnlyDesc)
 }
 

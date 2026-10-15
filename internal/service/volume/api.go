@@ -17,20 +17,19 @@ import (
 )
 
 // serverHasVolume reports whether volume volumeID is listed on server
-// serverID. found is false when the server does not exist.
+// serverID. A server that does not exist has no volumes.
 //
 // Volume.server only holds the hostname of the server a volume is attached
 // to, so the typed ServerDetail.volumes list is used to match by ID.
-func serverHasVolume(ctx context.Context, c *apiclient.Client, serverID, volumeID int32) (has, found bool, err error) {
+func serverHasVolume(ctx context.Context, c *apiclient.Client, serverID, volumeID int32) (bool, error) {
 	s, httpResp, err := c.Cloud().CloudServersRetrieve(ctx, serverID).Execute()
 	if apiclient.IsNotFound(httpResp) {
-		return false, false, nil
+		return false, nil
 	}
 	if err != nil {
-		return false, false, fmt.Errorf("reading server %d: %s", serverID, apiclient.ErrorDetail(err, httpResp))
+		return false, fmt.Errorf("reading server %d: %s", serverID, apiclient.ErrorDetail(err, httpResp))
 	}
-	has = slices.ContainsFunc(s.GetVolumes(), func(v sdk.Volume) bool { return v.GetId() == volumeID })
-	return has, true, nil
+	return slices.ContainsFunc(s.GetVolumes(), func(v sdk.Volume) bool { return v.GetId() == volumeID }), nil
 }
 
 // findServerByHostname returns the ID of the server with this hostname, or
@@ -61,7 +60,7 @@ func attachedServer(ctx context.Context, c *apiclient.Client, v *sdk.Volume, pri
 		return 0, nil
 	}
 	if prior != 0 {
-		has, _, err := serverHasVolume(ctx, c, prior, v.GetId())
+		has, err := serverHasVolume(ctx, c, prior, v.GetId())
 		if err != nil {
 			return 0, err
 		}

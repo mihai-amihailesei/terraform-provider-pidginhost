@@ -1,0 +1,106 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - run: go build -v .
+      - name: go mod tidy leaves no diff
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+
+  docs:
+    name: Generated docs are up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: terraform fmt
+        run: terraform fmt -check -recursive examples/
+      - name: tfplugindocs
+        run: |
+          go generate ./...
+          git diff --exit-code -- docs/ || {
+            echo "::error::docs/ is out of date. Run 'make docs' and commit the result."
+            exit 1
+          }
+
+  unit:
+    name: Unit tests (${{ matrix.cli }} ${{ matrix.version }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { cli: terraform, version: "1.6.*" }
+          - { cli: terraform, version: "1.9.*" }
+          - { cli: terraform, version: "latest" }
+          - { cli: tofu, version: "1.8.*" }
+          - { cli: tofu, version: "latest" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - if: matrix.cli == 'terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.version }}
+          terraform_wrapper: false
+      - if: matrix.cli == 'tofu'
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ matrix.version }}
+          tofu_wrapper: false
+      - name: Select CLI
+        run: |
+          echo "TF_ACC_TERRAFORM_PATH=$(command -v ${{ matrix.cli }})" >> "$GITHUB_ENV"
+          if [ "${{ matrix.cli }}" = "tofu" ]; then
+            echo "TF_ACC_PROVIDER_HOST=registry.opentofu.org" >> "$GITHUB_ENV"
+          fi
+      # No credentials: every resource test runs against the in-memory fake API.
+      - run: go test ./... -count=1 -timeout 15m
+        env:
+          CHECKPOINT_DISABLE: "1"

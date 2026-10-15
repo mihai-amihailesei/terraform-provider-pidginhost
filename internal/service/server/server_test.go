@@ -70,8 +70,11 @@ resource "pidginhost_server" "test" {
 	return b.String()
 }
 
-func expectUpdate(name string) resource.ConfigPlanChecks {
-	return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(name, plancheck.ResourceActionUpdate)}}
+// expectUpdate checks that pidginhost_server.test is updated in place.
+func expectUpdate() resource.ConfigPlanChecks {
+	return resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+		plancheck.ExpectResourceAction("pidginhost_server.test", plancheck.ResourceActionUpdate),
+	}}
 }
 
 func checkFake(f *fakeapi.Server, fn func(f *fakeapi.Server) error) resource.TestCheckFunc {
@@ -125,7 +128,7 @@ func TestUnitServer_lifecycle(t *testing.T) {
 			{
 				// Package change: in place, through modify-package.
 				Config:           step(func(o *serverOpts) { o.Package = `"cloud-s"` }),
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(name, "package", "cloud-s"),
 					resource.TestCheckResourceAttr(name, "cpus", "2"),
@@ -143,7 +146,7 @@ func TestUnitServer_lifecycle(t *testing.T) {
 				Config: step(func(o *serverOpts) {
 					o.Package, o.Project, o.PolicyIn, o.PowerState, o.DestroyProtection = `"cloud-s"`, "green", "DROP", "stopped", true
 				}),
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(name, "project", "green"),
 					resource.TestCheckResourceAttr(name, "firewall_policy_in", "DROP"),
@@ -165,7 +168,7 @@ func TestUnitServer_lifecycle(t *testing.T) {
 				Config: step(func(o *serverOpts) {
 					o.Package, o.Project, o.PolicyIn, o.PowerState, o.Firewall = `"cloud-s"`, "green", "DROP", "running", false
 				}),
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckNoResourceAttr(name, "firewall_rules_set_id"),
 					resource.TestCheckResourceAttr(name, "power_state", "running"),
@@ -214,19 +217,19 @@ func TestUnitServer_drift(t *testing.T) {
 			{
 				PreConfig:        func() { f.SetServerProject(id(), "elsewhere") },
 				Config:           cfg,
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr(name, "project", "p"),
 			},
 			{
 				PreConfig:        func() { f.SetServerPackage(id(), "cloud-m") },
 				Config:           cfg,
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr(name, "package", "cloud-xs"),
 			},
 			{
 				PreConfig:        func() { f.DetachServerFirewall(id()) },
 				Config:           cfg,
-				ConfigPlanChecks: expectUpdate(name),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttrPair(name, "firewall_rules_set_id", "pidginhost_firewall_rules_set.test", "id"),
 			},
 			{
@@ -358,7 +361,7 @@ func TestAccServer_basic(t *testing.T) {
 			},
 			{
 				Config:           step(func(o *serverOpts) { o.Project, o.PolicyIn = acctest.NamePrefix+"project-2", "DROP" }),
-				ConfigPlanChecks: expectUpdate(res),
+				ConfigPlanChecks: expectUpdate(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(res, "project", acctest.NamePrefix+"project-2"),
 					resource.TestCheckResourceAttr(res, "firewall_policy_in", "DROP"),
@@ -366,22 +369,22 @@ func TestAccServer_basic(t *testing.T) {
 			},
 			{
 				Config:           step(func(o *serverOpts) { o.Project, o.PowerState = acctest.NamePrefix+"project-2", "stopped" }),
-				ConfigPlanChecks: expectUpdate(res),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr(res, "power_state", "stopped"),
 			},
 			{
 				Config:           step(func(o *serverOpts) { o.Project, o.PowerState = acctest.NamePrefix+"project-2", "running" }),
-				ConfigPlanChecks: expectUpdate(res),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr(res, "power_state", "running"),
 			},
 			{
 				Config:           step(func(o *serverOpts) { o.Project, o.DestroyProtection = acctest.NamePrefix+"project-2", true }),
-				ConfigPlanChecks: expectUpdate(res),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr(res, "destroy_protection", "true"),
 			},
 			{
 				Config:           step(func(o *serverOpts) { o.Project, o.Firewall = acctest.NamePrefix+"project-2", false }),
-				ConfigPlanChecks: expectUpdate(res),
+				ConfigPlanChecks: expectUpdate(),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(res, "destroy_protection", "false"),
 					resource.TestCheckNoResourceAttr(res, "firewall_rules_set_id"),
@@ -411,7 +414,7 @@ func TestAccServer_packageChange(t *testing.T) {
 			{Config: cfg("local.acc_package")},
 			{
 				Config:           cfg("local.acc_package_upgrade"),
-				ConfigPlanChecks: expectUpdate("pidginhost_server.test"),
+				ConfigPlanChecks: expectUpdate(),
 				Check:            resource.TestCheckResourceAttr("pidginhost_server.test", "status", "active"),
 			},
 		},

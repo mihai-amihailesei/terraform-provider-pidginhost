@@ -105,7 +105,7 @@ func (r *floatingAuthResource) parse(m *floatingAuthModel) (fam floatingFamily, 
 }
 
 // find returns the authorization row for serverID, or nil.
-func (r *floatingAuthResource) find(ctx context.Context, fam floatingFamily, fipID, serverID int32) (*sdk.FloatingIPAuthorization, bool, error) {
+func (r *floatingAuthResource) find(ctx context.Context, fam floatingFamily, fipID, serverID int32) (*sdk.FloatingIPAuthorization, error) {
 	all, err := apiclient.ListAll(ctx, func(ctx context.Context, page int32) ([]sdk.FloatingIPAuthorization, bool, *http.Response, error) {
 		res, httpResp, err := fam.listAuth(ctx, r.Client, fipID, page)
 		if err != nil {
@@ -114,14 +114,14 @@ func (r *floatingAuthResource) find(ctx context.Context, fam floatingFamily, fip
 		return res.GetResults(), res.GetNext() != "", httpResp, nil
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	for _, a := range all {
 		if a.GetServerId() == serverID {
-			return &a, true, nil
+			return &a, nil
 		}
 	}
-	return nil, true, nil
+	return nil, nil
 }
 
 func (r *floatingAuthResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -145,7 +145,7 @@ func (r *floatingAuthResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 	plan.ID = types.StringValue(apiclient.JoinID(famName, apiclient.FormatID(fipID), apiclient.FormatID(serverID)))
-	a, _, err := r.find(ctx, fam, fipID, serverID)
+	a, err := r.find(ctx, fam, fipID, serverID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading floating IP authorizations", err.Error())
 		return
@@ -183,7 +183,7 @@ func (r *floatingAuthResource) Read(ctx context.Context, req resource.ReadReques
 		tfutil.AddAPIError(&resp.Diagnostics, "Error reading "+fam.label, err, httpResp)
 		return
 	}
-	a, _, err := r.find(ctx, fam, fipID, serverID)
+	a, err := r.find(ctx, fam, fipID, serverID)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading floating IP authorizations", err.Error())
 		return

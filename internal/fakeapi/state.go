@@ -16,6 +16,7 @@ type state struct {
 	floatingV4  map[int32]*floatingIP
 	floatingV6  map[int32]*floatingIP
 	volumes     map[int32]*volume
+	buckets     map[int32]*bucket
 }
 
 func (f *Server) initState() {
@@ -28,6 +29,7 @@ func (f *Server) initState() {
 	f.floatingV4 = map[int32]*floatingIP{}
 	f.floatingV6 = map[int32]*floatingIP{}
 	f.volumes = map[int32]*volume{}
+	f.buckets = map[int32]*bucket{}
 }
 
 func (f *Server) routes(mux *http.ServeMux) {
@@ -39,6 +41,7 @@ func (f *Server) routes(mux *http.ServeMux) {
 	f.ipRoutes(mux)
 	f.floatingRoutes(mux)
 	f.volumeRoutes(mux)
+	f.bucketRoutes(mux)
 }
 
 // onServerRemovedExtra releases floating IP authorizations and volumes of a

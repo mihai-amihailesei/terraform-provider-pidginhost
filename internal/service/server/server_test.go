@@ -437,3 +437,53 @@ data "pidginhost_server" "by_name" { hostname = pidginhost_server.test.hostname 
 		}},
 	})
 }
+
+func TestUnitServer_firewallNeedsPublicInterface(t *testing.T) {
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{{
+			Config: `
+resource "pidginhost_server" "test" {
+  image                   = "debian-12"
+  package                 = "cloud-xs"
+  no_network_acknowledged = true
+  firewall_policy_in      = "DROP"
+}
+`,
+			PlanOnly:    true,
+			ExpectError: regexp.MustCompile(`Firewall needs a public interface`),
+		}},
+	})
+}
+
+func TestUnitServer_noNetwork(t *testing.T) {
+	f := acctest.NewFake(t)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: f.ProviderConfig() + `
+resource "pidginhost_server" "test" {
+  image   = "debian-12"
+  package = "cloud-xs"
+}
+`,
+				ExpectError: regexp.MustCompile(`no_network_acknowledged`),
+			},
+			{
+				// A server without a public interface has no firewall settings.
+				Config: f.ProviderConfig() + `
+resource "pidginhost_server" "test" {
+  image                   = "debian-12"
+  package                 = "cloud-xs"
+  no_network_acknowledged = true
+}
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("pidginhost_server.test", "ipv4_address"),
+					resource.TestCheckNoResourceAttr("pidginhost_server.test", "firewall_policy_in"),
+				),
+			},
+		},
+	})
+}

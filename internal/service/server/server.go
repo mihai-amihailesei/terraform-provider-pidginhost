@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	_ resource.ResourceWithConfigure   = (*serverResource)(nil)
-	_ resource.ResourceWithImportState = (*serverResource)(nil)
+	_ resource.ResourceWithConfigure      = (*serverResource)(nil)
+	_ resource.ResourceWithImportState    = (*serverResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*serverResource)(nil)
 )
 
 const (
@@ -46,6 +47,36 @@ func (r *serverResource) Metadata(_ context.Context, req resource.MetadataReques
 
 func (r *serverResource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = serverSchema(ctx)
+}
+
+// ValidateConfig rejects combinations the API cannot honour, so that they
+// fail at plan time instead of producing an inconsistent result after apply.
+func (r *serverResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var cfg serverModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	noNetwork := cfg.NoNetworkAcknowledged.ValueBool() &&
+		cfg.PublicIPv4.IsNull() && cfg.PublicIPv6.IsNull() &&
+		!cfg.NewIPv4.ValueBool() && !cfg.NewIPv6.ValueBool()
+	if !noNetwork {
+		return
+	}
+	for _, attr := range []struct {
+		name string
+		set  bool
+	}{
+		{"firewall_rules_set_id", !cfg.FirewallRulesSetID.IsNull()},
+		{"firewall_policy_in", !cfg.FirewallPolicyIn.IsNull()},
+		{"firewall_policy_out", !cfg.FirewallPolicyOut.IsNull()},
+	} {
+		if attr.set {
+			resp.Diagnostics.AddAttributeError(path.Root(attr.name), "Firewall needs a public interface",
+				"The firewall applies to the server's public interface, but this server is created without a public IP "+
+					"(no_network_acknowledged = true and no public_ipv4, new_ipv4, public_ipv6 or new_ipv6).")
+		}
+	}
 }
 
 func (r *serverResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -122,11 +153,18 @@ func (r *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
+	wantHA := plan.EnableHA
 	plan.ID = types.StringValue(apiclient.FormatID(id))
 	if _, d := r.refresh(ctx, &plan, true); d.HasError() {
 		resp.Diagnostics.Append(d...)
 		r.saveAfterFailure(ctx, &plan, id, &resp.State, &resp.Diagnostics)
 		return
+	}
+	if tfutil.Known(wantHA) && !wantHA.Equal(plan.EnableHA) {
+		// Report this clearly rather than as an "inconsistent result".
+		resp.Diagnostics.AddError("High availability was not applied",
+			fmt.Sprintf("enable_ha = %t was requested, but the API reports ha_enabled = %t for server %d. "+
+				"HA may not be available for this package or generation.", wantHA.ValueBool(), plan.EnableHA.ValueBool(), id))
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }

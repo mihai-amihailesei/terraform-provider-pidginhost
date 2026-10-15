@@ -181,7 +181,8 @@ func serverSchema(ctx context.Context) schema.Schema {
 			"new_ipv4": schema.BoolAttribute{
 				Optional: true,
 				MarkdownDescription: "*Create-only.* Allocate a new IPv4 and attach it before first boot. The address is not " +
-					"managed as a separate resource.",
+					"managed as a separate resource, and the API does not document whether it is released when the server " +
+					"is deleted. To control the address's lifetime, create a `pidginhost_ipv4` and pass it as `public_ipv4`.",
 				PlanModifiers: createOnlyBool,
 			},
 			"public_ipv6": schema.StringAttribute{
@@ -191,7 +192,8 @@ func serverSchema(ctx context.Context) schema.Schema {
 			},
 			"new_ipv6": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "*Create-only.* Allocate a new IPv6 and attach it before first boot.",
+				MarkdownDescription: "*Create-only.* Allocate a new IPv6 and attach it before first boot. As with `new_ipv4`, " +
+					"the address is not managed as a separate resource.",
 				PlanModifiers:       createOnlyBool,
 			},
 			"no_network_acknowledged": schema.BoolAttribute{

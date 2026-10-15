@@ -75,8 +75,8 @@ output "web_ipv4" {
 - `firewall_rules_set_id` (String) ID of the `pidginhost_firewall_rules_set` applied to the server's public interface. It is applied at creation, before first boot, and can be changed or removed in place.
 - `generation` (String) *Create-only.* Hardware generation slug. When omitted, the API's default is used.
 - `hostname` (String) Hostname. When omitted, the API picks one. Changing it replaces the server (the API cannot rename a server).
-- `new_ipv4` (Boolean) *Create-only.* Allocate a new IPv4 and attach it before first boot. The address is not managed as a separate resource.
-- `new_ipv6` (Boolean) *Create-only.* Allocate a new IPv6 and attach it before first boot.
+- `new_ipv4` (Boolean) *Create-only.* Allocate a new IPv4 and attach it before first boot. The address is not managed as a separate resource, and the API does not document whether it is released when the server is deleted. To control the address's lifetime, create a `pidginhost_ipv4` and pass it as `public_ipv4`.
+- `new_ipv6` (Boolean) *Create-only.* Allocate a new IPv6 and attach it before first boot. As with `new_ipv4`, the address is not managed as a separate resource.
 - `no_network_acknowledged` (Boolean) *Create-only.* Confirm that the server is intentionally created without a public IP.
 - `password` (String, Sensitive) Password for the default user. Can be changed in place. The API never returns it, so changes made outside Terraform are not detected. It is stored in the Terraform state.
 - `power_state` (String) Desired power state: `running` or `stopped`. Stopping uses a graceful shutdown and falls back to a hard stop if the guest does not power off. When omitted, the power state is reported but not managed.

@@ -219,7 +219,8 @@ func (r *credentialsResource) Update(ctx context.Context, req resource.UpdateReq
 
 // Delete removes the credentials from state. The API has no way to revoke
 // them other than rotating, which would break whatever still uses them.
-func (r *credentialsResource) Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse) {}
+func (r *credentialsResource) Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse) {
+}
 
 func (r *credentialsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	if _, err := apiclient.ParseID(req.ID); err != nil {

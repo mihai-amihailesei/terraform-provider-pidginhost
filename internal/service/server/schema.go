@@ -191,10 +191,10 @@ func serverSchema(ctx context.Context) schema.Schema {
 				PlanModifiers:       createOnly,
 			},
 			"new_ipv6": schema.BoolAttribute{
-				Optional:            true,
+				Optional: true,
 				MarkdownDescription: "*Create-only.* Allocate a new IPv6 and attach it before first boot. As with `new_ipv4`, " +
 					"the address is not managed as a separate resource.",
-				PlanModifiers:       createOnlyBool,
+				PlanModifiers: createOnlyBool,
 			},
 			"no_network_acknowledged": schema.BoolAttribute{
 				Optional:            true,

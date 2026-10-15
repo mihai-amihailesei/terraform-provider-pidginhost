@@ -41,8 +41,12 @@ func (d *bucketDataSource) Metadata(_ context.Context, req datasource.MetadataRe
 }
 
 func (d *bucketDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
-	str := func(desc string) schema.StringAttribute { return schema.StringAttribute{Computed: true, MarkdownDescription: desc} }
-	num := func(desc string) schema.Int64Attribute { return schema.Int64Attribute{Computed: true, MarkdownDescription: desc} }
+	str := func(desc string) schema.StringAttribute {
+		return schema.StringAttribute{Computed: true, MarkdownDescription: desc}
+	}
+	num := func(desc string) schema.Int64Attribute {
+		return schema.Int64Attribute{Computed: true, MarkdownDescription: desc}
+	}
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Looks up an existing bucket by `id` or `name` (exactly one).",
 		Attributes: map[string]schema.Attribute{

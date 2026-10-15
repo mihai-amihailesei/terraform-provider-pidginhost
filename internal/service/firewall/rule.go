@@ -93,7 +93,7 @@ func (r *ruleResource) Schema(ctx context.Context, _ resource.SchemaRequest, res
 				MarkdownDescription: "`ACCEPT`, `DROP` or `REJECT`.",
 				Validators:          []validator.String{stringvalidator.OneOf("ACCEPT", "DROP", "REJECT")},
 			},
-			"protocol": textAttr("Protocol, for example `tcp` or `udp`. Empty means any.", 100),
+			"protocol":         textAttr("Protocol, for example `tcp` or `udp`. Empty means any.", 100),
 			"source":           textAttr("Source address. "+addrDesc, 500),
 			"source_port":      textAttr("Source port. "+portDesc, 500),
 			"destination":      textAttr("Destination address. "+addrDesc, 500),

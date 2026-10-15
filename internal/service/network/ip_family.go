@@ -9,7 +9,7 @@ import (
 
 	sdk "github.com/pidginhost/sdk-go"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
 )
 
 // ipInfo is the part of PublicIPv4/PublicIPv6 the provider uses. The two

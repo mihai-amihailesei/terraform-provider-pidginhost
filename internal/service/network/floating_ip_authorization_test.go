@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
 )
 
 func authConfig(family, server string) string {

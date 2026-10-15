@@ -13,7 +13,7 @@ import (
 
 	sdk "github.com/pidginhost/sdk-go"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
 )
 
 // serverHasVolume reports whether volume volumeID is listed on server

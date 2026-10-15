@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
-	"github.com/mihai-amihailesei/pidgin-host/internal/tfutil"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/tfutil"
 )
 
 type serverDataSource struct{ tfutil.DataSourceBase }

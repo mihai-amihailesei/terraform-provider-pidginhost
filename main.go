@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/provider"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/provider"
 )
 
 //go:generate go tool tfplugindocs generate --provider-name pidginhost --rendered-provider-name "Pidgin Host"

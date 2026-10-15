@@ -41,4 +41,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/mihai-amihailesei/pidgin-host
+        - github.com/mihai-amihailesei/terraform-provider-pidginhost

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
-	"github.com/mihai-amihailesei/pidgin-host/internal/fakeapi"
-	"github.com/mihai-amihailesei/pidgin-host/internal/provider"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/fakeapi"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/provider"
 )
 
 // TestUnitExampleComplete applies examples/complete, unchanged, against the

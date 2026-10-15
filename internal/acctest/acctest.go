@@ -26,9 +26,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
-	"github.com/mihai-amihailesei/pidgin-host/internal/fakeapi"
-	"github.com/mihai-amihailesei/pidgin-host/internal/provider"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/fakeapi"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/provider"
 )
 
 // NamePrefix starts the name of every resource an acceptance test creates.

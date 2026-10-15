@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
 )
 
 // ResourceBase is embedded by every resource. It receives the API client

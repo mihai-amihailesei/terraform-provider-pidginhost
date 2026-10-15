@@ -1,4 +1,4 @@
-module github.com/mihai-amihailesei/pidgin-host
+module github.com/mihai-amihailesei/terraform-provider-pidginhost
 
 go 1.25.8
 

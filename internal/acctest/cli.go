@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6/tf6server"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/provider"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/provider"
 )
 
 // CLIPath returns the terraform or tofu binary to use for CLI-driven tests:

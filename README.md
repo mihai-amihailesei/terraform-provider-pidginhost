@@ -208,9 +208,8 @@ per-platform zips, `SHA256SUMS`, a detached GPG signature of the checksums, and 
    `PASSPHRASE`.
 2. Push a tag such as `v0.1.0`. The **Release** workflow creates a draft GitHub release; review it, then publish.
 3. Publish the provider on the registries:
-   - **Terraform Registry:** the registry expects the repository to be named `terraform-provider-pidginhost`, so
-     rename it (or publish from a repository with that name). Then sign in to registry.terraform.io with GitHub,
-     add the GPG public key, and publish the repository.
+   - **Terraform Registry:** the repository must be public and named `terraform-provider-pidginhost`. Sign in to
+     registry.terraform.io with GitHub, add the GPG public key, and publish the repository.
    - **OpenTofu Registry:** submit the provider and the GPG public key through the
      [opentofu/registry](https://github.com/opentofu/registry) repository's issue templates.
 

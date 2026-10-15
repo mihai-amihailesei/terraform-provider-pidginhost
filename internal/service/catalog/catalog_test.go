@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
 )
 
 func TestUnitCatalogDataSources(t *testing.T) {

@@ -25,8 +25,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	sdk "github.com/pidginhost/sdk-go"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
 )
 
 func TestMain(m *testing.M) {

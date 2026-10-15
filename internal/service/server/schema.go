@@ -21,7 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/tfutil"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/tfutil"
 )
 
 // Power states accepted in configuration.

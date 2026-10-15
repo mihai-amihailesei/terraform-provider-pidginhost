@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
 )
 
 func credentialsConfig(bucket, trigger string) string {

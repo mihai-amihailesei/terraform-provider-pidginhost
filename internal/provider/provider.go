@@ -18,14 +18,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/account"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/catalog"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/firewall"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/network"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/objectstorage"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/server"
-	"github.com/mihai-amihailesei/pidgin-host/internal/service/volume"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/account"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/catalog"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/firewall"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/network"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/objectstorage"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/server"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/service/volume"
 )
 
 // Environment variables read by the provider.

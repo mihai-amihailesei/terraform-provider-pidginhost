@@ -10,9 +10,9 @@ import (
 
 	sdk "github.com/pidginhost/sdk-go"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
-	"github.com/mihai-amihailesei/pidgin-host/internal/apiclient"
-	"github.com/mihai-amihailesei/pidgin-host/internal/fakeapi"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/apiclient"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/fakeapi"
 )
 
 // TestUnitSweepersOnlyDeleteTestResources runs every sweeper against the fake

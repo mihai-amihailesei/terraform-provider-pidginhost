@@ -13,8 +13,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
-	"github.com/mihai-amihailesei/pidgin-host/internal/acctest"
-	"github.com/mihai-amihailesei/pidgin-host/internal/fakeapi"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/acctest"
+	"github.com/mihai-amihailesei/terraform-provider-pidginhost/internal/fakeapi"
 )
 
 // serverOpts drives serverConfig. Empty fields are omitted.

@@ -15,6 +15,8 @@ func Resources() []func() resource.Resource {
 		NewPrivateNetworkAttachmentResource,
 		NewIPv4Resource,
 		NewIPv6Resource,
+		NewIPv4AttachmentResource,
+		NewIPv6AttachmentResource,
 	}
 }
 

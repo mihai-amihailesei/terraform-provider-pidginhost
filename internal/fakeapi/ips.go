@@ -255,3 +255,14 @@ func (f *Server) ipRoutes(mux *http.ServeMux) {
 		})
 	}
 }
+
+// DetachAllIPs detaches every address of one family from a server, out of band.
+func (f *Server) DetachAllIPs(v6 bool, serverID int32) {
+	f.Do(func() {
+		for _, ip := range f.ipStore(v6) {
+			if ip.ServerID == serverID {
+				ip.ServerID = 0
+			}
+		}
+	})
+}

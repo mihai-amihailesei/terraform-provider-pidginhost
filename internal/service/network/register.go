@@ -13,6 +13,8 @@ func Resources() []func() resource.Resource {
 	return []func() resource.Resource{
 		NewPrivateNetworkResource,
 		NewPrivateNetworkAttachmentResource,
+		NewIPv4Resource,
+		NewIPv6Resource,
 	}
 }
 

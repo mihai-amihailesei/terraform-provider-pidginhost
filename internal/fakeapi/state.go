@@ -30,6 +30,7 @@ func (f *Server) routes(mux *http.ServeMux) {
 	f.firewallRoutes(mux)
 	f.privateNetworkRoutes(mux)
 	f.serverRoutes(mux)
+	f.ipRoutes(mux)
 }
 
 // Hooks filled in by resources added to the fake later.

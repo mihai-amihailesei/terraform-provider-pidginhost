@@ -5,6 +5,7 @@ package fakeapi
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 )
 
@@ -155,4 +156,102 @@ func (f *Server) onServerRemoved(sid int32) {
 		delete(pn.Members, sid)
 	}
 	f.onServerRemovedExtra(sid)
+}
+
+// SetReverseDNS changes a PTR name out of band.
+func (f *Server) SetReverseDNS(v6 bool, id int32, name string) {
+	f.Do(func() { f.ipStore(v6)[id].ReverseDNS = name })
+}
+
+// DetachIP detaches an address out of band.
+func (f *Server) DetachIP(v6 bool, id int32) {
+	f.Do(func() { f.ipStore(v6)[id].ServerID = 0 })
+}
+
+func (f *Server) ipRoutes(mux *http.ServeMux) {
+	for _, fam := range []struct {
+		name string
+		v6   bool
+	}{{"ipv4", false}, {"ipv6", true}} {
+		fam := fam
+		base := "/api/cloud/" + fam.name + "/"
+		with := func(w http.ResponseWriter, r *http.Request, fn func(ip *publicIP)) {
+			id, ok := pathID(r, "id")
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			ip := f.ipStore(fam.v6)[id]
+			if !ok || ip == nil {
+				notFound(w)
+				return
+			}
+			fn(ip)
+		}
+		mux.HandleFunc("GET "+base+"{$}", func(w http.ResponseWriter, r *http.Request) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			items := []any{}
+			for _, id := range sortedKeys(f.ipStore(fam.v6)) {
+				items = append(items, f.ipStore(fam.v6)[id].json(f))
+			}
+			writeJSON(w, http.StatusOK, paginate(r, items))
+		})
+		mux.HandleFunc("POST "+base+"{$}", func(w http.ResponseWriter, r *http.Request) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			writeJSON(w, http.StatusCreated, f.allocateIP(fam.v6).json(f))
+		})
+		mux.HandleFunc("GET "+base+"{id}/{$}", func(w http.ResponseWriter, r *http.Request) {
+			with(w, r, func(ip *publicIP) { writeJSON(w, http.StatusOK, ip.json(f)) })
+		})
+		mux.HandleFunc("DELETE "+base+"{id}/{$}", func(w http.ResponseWriter, r *http.Request) {
+			with(w, r, func(ip *publicIP) {
+				if ip.ServerID != 0 {
+					badRequest(w, "detail", "Detach the address before deleting it.")
+					return
+				}
+				delete(f.ipStore(fam.v6), ip.ID)
+				w.WriteHeader(http.StatusNoContent)
+			})
+		})
+		mux.HandleFunc("POST "+base+"{id}/detach/{$}", func(w http.ResponseWriter, r *http.Request) {
+			with(w, r, func(ip *publicIP) {
+				detached := ip.ServerID != 0
+				ip.ServerID = 0
+				writeJSON(w, http.StatusOK, map[string]any{"detached": detached})
+			})
+		})
+		mux.HandleFunc("GET "+base+"{id}/rdns/{$}", func(w http.ResponseWriter, r *http.Request) {
+			with(w, r, func(ip *publicIP) { writeJSON(w, http.StatusOK, map[string]any{"reverse_dns": ip.ReverseDNS}) })
+		})
+		mux.HandleFunc("POST "+base+"{id}/rdns/{$}", func(w http.ResponseWriter, r *http.Request) {
+			with(w, r, func(ip *publicIP) {
+				name, _ := str(bodyOf(r), "reverse_dns")
+				if name == "" {
+					badRequest(w, "reverse_dns", "This field may not be blank.")
+					return
+				}
+				ip.ReverseDNS = name
+				writeJSON(w, http.StatusOK, map[string]any{"reverse_dns": name})
+			})
+		})
+		mux.HandleFunc("POST /api/cloud/servers/{id}/attach-"+fam.name+"/{$}", func(w http.ResponseWriter, r *http.Request) {
+			f.withServer(w, r, func(s *server) {
+				b := bodyOf(r)
+				ref, _ := str(b, fam.name)
+				ip := f.findIP(fam.v6, ref)
+				if ip == nil {
+					badRequest(w, fam.name, "Address not found.")
+					return
+				}
+				if ip.ServerID != 0 && ip.ServerID != s.ID {
+					badRequest(w, fam.name, "The address is attached to another server.")
+					return
+				}
+				ip.ServerID = s.ID
+				s.HasPublic = true
+				reboot, _ := boolean(b, "reboot")
+				writeJSON(w, http.StatusOK, map[string]any{"attached": true, "reboot_required": true, "rebooted": reboot})
+			})
+		})
+	}
 }

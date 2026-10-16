@@ -244,14 +244,28 @@ powered off.
 ### C5. Public interface firewall fields
 
 - `PublicInterface.fw_rules_set` is documented as "ID or slug", but
-  `FirewallRulesSet` has no `slug` property. It is unclear what the GET
-  returns.
+  `FirewallRulesSet` has no `slug` property. In practice the GET can return
+  neither: for a free-tier server it returned `"free tier fw"`, the name of
+  the platform's read-only set (`GET /api/cloud/firewall-rules-set/` lists it
+  as `{"id": 767, "name": "Free tier FW", "read_only": true}`) in lower case.
+  A lower-cased name is not unique, so a client cannot always map it back to
+  a set. Please return the ID (and document the field as an ID).
+- The spec does not mention that the platform attaches a read-only rule set
+  (and an inbound `DROP` policy) to every free-tier server, nor whether such
+  a server accepts a user rule set in its place, or detaching the read-only
+  one.
 - Detaching a rule set requires sending `"fw_rules_set": null` explicitly.
   Omitting the field leaves the set attached. This caused the official
   Terraform provider's "inconsistent result after apply" bug. Please state it
   in the description.
 - What `DELETE /api/cloud/servers/{id}/public-interface/` does is not
   described: does it remove the firewall, or the interface and its IPs?
+
+*Provider workaround:* `firewall_rules_set_id` is optional and computed, so a
+set the platform attached is recorded without a diff and never detached
+unless the configuration set the attribute. A name returned by the GET is
+resolved to an ID through the rule set list, ignoring case and including
+read-only sets (`resolveRulesSetID` in `internal/service/server/api.go`).
 
 ### C6. Asynchrony of attach/detach and resize actions
 

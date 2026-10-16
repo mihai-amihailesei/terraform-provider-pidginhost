@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type server struct {
@@ -63,6 +64,18 @@ func (f *Server) serverSummary(s *server) map[string]any {
 		// ignore it.
 		"billing": nil,
 	}
+}
+
+// applyFreeTierFirewall mirrors the live API: a free-tier server with no
+// rule set of its own gets the platform's read-only set and an inbound DROP
+// policy.
+func (f *Server) applyFreeTierFirewall(s *server) {
+	if s.Package["slug"] != freeTierPackage || !s.HasPublic || s.FwRulesSet != nil {
+		return
+	}
+	id := strconv.Itoa(int(f.freeTierRuleSet().ID))
+	s.FwRulesSet = &id
+	s.FwPolicyIn = "DROP"
 }
 
 // advance moves asynchronous operations forward by one poll.
@@ -249,6 +262,7 @@ func (f *Server) serverRoutes(mux *http.ServeMux) {
 			badRequest(w, field, msg)
 			return
 		}
+		f.applyFreeTierFirewall(s)
 		f.servers[s.ID] = s
 		writeJSON(w, http.StatusCreated, map[string]any{"id": s.ID})
 	})
@@ -346,6 +360,13 @@ func (f *Server) serverRoutes(mux *http.ServeMux) {
 		var set any
 		if s.FwRulesSet != nil {
 			set = *s.FwRulesSet
+			// The live API reports the free-tier set by its name in lower
+			// case, not by ID; ReportRuleSetsByName extends that to every
+			// set.
+			n, _ := strconv.Atoi(*s.FwRulesSet)
+			if rs := f.ruleSets[int32(n)]; rs != nil && (rs.ReadOnly || f.ReportRuleSetsByName) {
+				set = strings.ToLower(rs.Name)
+			}
 		}
 		return map[string]any{
 			"interface": "eth0", "ipv4": ipv4, "ipv6": ipv6,
@@ -422,6 +443,7 @@ func (f *Server) CreateServer(hostname, imageSlug, packageSlug string) int32 {
 		Power: "running", FwPolicyIn: "ACCEPT", FwPolicyOut: "ACCEPT", HasPublic: true,
 	}
 	f.allocateIP(false).ServerID = s.ID
+	f.applyFreeTierFirewall(s)
 	f.servers[s.ID] = s
 	return s.ID
 }

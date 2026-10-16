@@ -19,12 +19,18 @@ func (f *Server) seedCatalog() {
 		{"id": 11, "slug": "cloud-xs", "name": "Cloud XS", "cpus": 1, "memory": 1, "disk_size": 20, "traffic": 1, "available_generations": []string{"gen1", "gen2"}},
 		{"id": 12, "slug": "cloud-s", "name": "Cloud S", "cpus": 2, "memory": 2, "disk_size": 40, "traffic": 2, "available_generations": []string{"gen1", "gen2"}},
 		{"id": 13, "slug": "cloud-m", "name": "Cloud M", "cpus": 4, "memory": 8, "disk_size": 80, "traffic": 4, "available_generations": []string{"gen2"}},
+		// The free tier: the platform attaches its read-only rule set to
+		// every server created with it (see freeTierPackage).
+		{"id": 10, "slug": freeTierPackage, "name": "Cloud V0", "cpus": 1, "memory": 1, "disk_size": 10, "traffic": 1, "available_generations": []string{"general-purpose"}},
 	}
 	f.storageProducts = []map[string]any{
 		{"id": 21, "slug": "ssd", "name": "SSD storage", "type": "volume", "unit": "GB", "price": "0.0500", "min_size": 10, "max_size": 2000},
 		{"id": 22, "slug": "hdd", "name": "HDD storage", "type": "volume", "unit": "GB", "price": "0.0200", "min_size": 50, "max_size": 10000},
 	}
 }
+
+// freeTierPackage is the slug of the free-tier package.
+const freeTierPackage = "cloudv-0"
 
 func (f *Server) catalogRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/cloud/images/{$}", func(w http.ResponseWriter, r *http.Request) {

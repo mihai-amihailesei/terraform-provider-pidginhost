@@ -252,7 +252,11 @@ func TestUnitServer_packageByID(t *testing.T) {
 		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
 		Steps: []resource.TestStep{{
 			Config: f.ProviderConfig() + serverConfig(serverOpts{Hostname: "byid", Image: `"3"`, Package: `"11"`}),
-			Check:  resource.TestCheckResourceAttr("pidginhost_server.test", "package", "11"),
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("pidginhost_server.test", "package", "11"),
+				// A paid server gets no rule set of the platform's.
+				resource.TestCheckNoResourceAttr("pidginhost_server.test", "firewall_rules_set_id"),
+			),
 		}},
 	})
 }
@@ -503,6 +507,220 @@ resource "pidginhost_server" "test" {
 					resource.TestCheckNoResourceAttr("pidginhost_server.test", "ipv4_address"),
 					resource.TestCheckNoResourceAttr("pidginhost_server.test", "firewall_policy_in"),
 				),
+			},
+		},
+	})
+}
+
+// freeTierConfig is a free-tier server as the live API creates one: the
+// platform attaches its read-only rule set without being asked.
+func freeTierConfig(f *fakeapi.Server, extra string) string {
+	return f.ProviderConfig() + `
+resource "pidginhost_server" "test" {
+  hostname   = "gateway"
+  image      = "debian-12"
+  package    = "cloudv-0"
+  generation = "general-purpose"
+  new_ipv4   = true
+` + extra + `}
+`
+}
+
+func checkFreeTierSet(f *fakeapi.Server) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		return resource.TestCheckResourceAttr("pidginhost_server.test", "firewall_rules_set_id",
+			fmt.Sprint(f.FreeTierRuleSetID()))(s)
+	}
+}
+
+// publicInterfaceBodies returns the bodies of every firewall update.
+func publicInterfaceBodies(f *fakeapi.Server) []map[string]any {
+	var out []map[string]any
+	for _, r := range f.Requests() {
+		if r.Method == "POST" && strings.HasSuffix(r.Path, "/public-interface/") {
+			out = append(out, r.Body)
+		}
+	}
+	return out
+}
+
+// A free-tier server without firewall_rules_set_id in the configuration
+// records the platform's read-only set (reported by the API by its name in
+// lower case) as its ID, with no inconsistent result, no diff afterwards,
+// and no attempt to detach it.
+func TestUnitServer_freeTierPlatformRuleSet(t *testing.T) {
+	f := acctest.NewFake(t)
+	const name = "pidginhost_server.test"
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: freeTierConfig(f, ""),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkFreeTierSet(f),
+					resource.TestCheckResourceAttr(name, "firewall_policy_in", "DROP"),
+				),
+			},
+			{
+				Config: freeTierConfig(f, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectEmptyPlan(),
+				}},
+			},
+			{
+				// Changing a policy updates the firewall without touching
+				// the platform's rule set.
+				Config:           freeTierConfig(f, "  firewall_policy_out = \"REJECT\"\n"),
+				ConfigPlanChecks: expectUpdate(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkFreeTierSet(f),
+					resource.TestCheckResourceAttr(name, "firewall_policy_out", "REJECT"),
+					checkFake(f, func(f *fakeapi.Server) error {
+						bodies := publicInterfaceBodies(f)
+						if len(bodies) != 1 {
+							return fmt.Errorf("%d public-interface updates, want 1", len(bodies))
+						}
+						if v, present := bodies[0]["fw_rules_set"]; present {
+							return fmt.Errorf("public-interface update sent fw_rules_set = %v for an unmanaged set", v)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				// Another in-place change leaves the firewall alone.
+				Config:           freeTierConfig(f, "  firewall_policy_out = \"REJECT\"\n  project = \"edge\"\n"),
+				ConfigPlanChecks: expectUpdate(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkFreeTierSet(f),
+					checkFake(f, func(f *fakeapi.Server) error {
+						if n := len(publicInterfaceBodies(f)); n != 1 {
+							return fmt.Errorf("%d public-interface updates, want 1", n)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				ResourceName:            name,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: importIgnore,
+			},
+		},
+	})
+}
+
+// Importing a free-tier server and refreshing it resolves the platform's set
+// to its ID and leaves it attached.
+func TestUnitServer_freeTierImport(t *testing.T) {
+	f := acctest.NewFake(t)
+	id := f.CreateServer("gateway", "debian-12", "cloudv-0")
+	cfg := freeTierConfig(f, "")
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg,
+				ResourceName:       "pidginhost_server.test",
+				ImportState:        true,
+				ImportStateId:      fmt.Sprint(id),
+				ImportStatePersist: true,
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					want := fmt.Sprint(f.FreeTierRuleSetID())
+					if got := states[0].Attributes["firewall_rules_set_id"]; got != want {
+						return fmt.Errorf("imported firewall_rules_set_id = %q, want %q", got, want)
+					}
+					return nil
+				},
+			},
+			{
+				// The first apply stores the create-only attributes.
+				Config: cfg,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkFreeTierSet(f),
+					checkFake(f, func(f *fakeapi.Server) error {
+						if n := len(publicInterfaceBodies(f)); n != 0 {
+							return fmt.Errorf("%d public-interface updates, want none", n)
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				RefreshState: true,
+				Check:        checkFreeTierSet(f),
+			},
+			{
+				Config: cfg,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectEmptyPlan(),
+				}},
+			},
+		},
+	})
+}
+
+// A rule set the configuration sets compares equal when the API reports it
+// by name (in any case) instead of by ID, and removing it from the
+// configuration still detaches it.
+func TestUnitServer_userRuleSetReportedByName(t *testing.T) {
+	f := acctest.NewFake(t)
+	f.ReportRuleSetsByName = true
+	const name = "pidginhost_server.test"
+	cfg := func(withSet bool) string {
+		c := f.ProviderConfig() + `
+resource "pidginhost_firewall_rules_set" "web" {
+  name = "Web FW"
+}
+
+resource "pidginhost_server" "test" {
+  hostname = "named"
+  image    = "debian-12"
+  package  = "cloud-xs"
+  new_ipv4 = true
+`
+		if withSet {
+			c += "  firewall_rules_set_id = pidginhost_firewall_rules_set.web.id\n"
+		}
+		return c + "}\n"
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: acctest.FakeProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: cfg(true),
+				Check:  resource.TestCheckResourceAttrPair(name, "firewall_rules_set_id", "pidginhost_firewall_rules_set.web", "id"),
+			},
+			{
+				Config: cfg(true),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectEmptyPlan(),
+				}},
+			},
+			{
+				Config:           cfg(false),
+				ConfigPlanChecks: expectUpdate(),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr(name, "firewall_rules_set_id"),
+					checkFake(f, func(f *fakeapi.Server) error {
+						bodies := publicInterfaceBodies(f)
+						if len(bodies) != 1 || bodies[0]["fw_rules_set"] != nil {
+							return fmt.Errorf("want one public-interface update detaching the set, got %v", bodies)
+						}
+						if _, present := bodies[0]["fw_rules_set"]; !present {
+							return fmt.Errorf("the detach did not send fw_rules_set: null")
+						}
+						return nil
+					}),
+				),
+			},
+			{
+				// Once detached and unmanaged, nothing changes.
+				Config: cfg(false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectEmptyPlan(),
+				}},
 			},
 		},
 	})

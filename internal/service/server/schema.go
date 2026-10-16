@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
@@ -87,6 +88,57 @@ var privateNetworkObjectType = types.ObjectType{AttrTypes: map[string]attr.Type{
 
 func useState() []planmodifier.String {
 	return []planmodifier.String{stringplanmodifier.UseStateForUnknown()}
+}
+
+// privateKeyRulesSetManaged is set in private state while the
+// configuration sets firewall_rules_set_id. It tells a configuration that
+// removed the attribute (detach the set) apart from one that never set it
+// (keep whatever set the platform attached).
+const privateKeyRulesSetManaged = "fw_rules_set_managed"
+
+type privateState interface {
+	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
+	SetKey(ctx context.Context, key string, value []byte) diag.Diagnostics
+}
+
+type privateGetter interface {
+	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
+}
+
+func rulesSetManaged(ctx context.Context, p privateGetter) bool {
+	v, _ := p.GetKey(ctx, privateKeyRulesSetManaged)
+	return string(v) == "true"
+}
+
+func setRulesSetManaged(ctx context.Context, p privateState, managed bool, diags *diag.Diagnostics) {
+	var v []byte
+	if managed {
+		v = []byte("true")
+	}
+	diags.Append(p.SetKey(ctx, privateKeyRulesSetManaged, v)...)
+}
+
+// rulesSetPlan plans firewall_rules_set_id when the configuration leaves it
+// null: null if the configuration used to set it (so the set is detached),
+// otherwise the value in state (so a set attached by the platform, such as
+// the free-tier one, causes no diff and is left alone).
+type rulesSetPlan struct{}
+
+func (rulesSetPlan) Description(context.Context) string {
+	return "When not configured, keeps the rule set attached outside Terraform; removing a configured value detaches it."
+}
+
+func (m rulesSetPlan) MarkdownDescription(ctx context.Context) string { return m.Description(ctx) }
+
+func (rulesSetPlan) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if !req.ConfigValue.IsNull() || req.State.Raw.IsNull() {
+		return
+	}
+	if rulesSetManaged(ctx, req.Private) {
+		resp.PlanValue = types.StringNull()
+		return
+	}
+	resp.PlanValue = req.StateValue
 }
 
 func serverSchema(ctx context.Context) schema.Schema {
@@ -239,10 +291,16 @@ func serverSchema(ctx context.Context) schema.Schema {
 				PlanModifiers: []planmodifier.Int64{tfutil.CreateOnlyInt64()},
 			},
 			"firewall_rules_set_id": schema.StringAttribute{
-				Optional: true,
+				Optional: true, Computed: true,
 				MarkdownDescription: "ID of the `pidginhost_firewall_rules_set` applied to the server's public interface. " +
-					"It is applied at creation, before first boot, and can be changed or removed in place.",
-				Validators: []validator.String{tfutil.IsID()},
+					"It is applied at creation, before first boot, and can be changed in place. Removing it from a " +
+					"configuration that set it detaches the set. " +
+					"When it is not set, the provider does not manage the rule set and records whichever set the platform " +
+					"reports. Pidgin Host attaches its own read-only rule set (named `Free tier FW`) to every free-tier " +
+					"server; its ID shows up here without a diff, and the provider never detaches it. Whether a free-tier " +
+					"server accepts a rule set of your own instead is not documented by the API.",
+				Validators:    []validator.String{tfutil.IsID()},
+				PlanModifiers: []planmodifier.String{rulesSetPlan{}},
 			},
 			"firewall_policy_in": schema.StringAttribute{
 				Optional: true, Computed: true,

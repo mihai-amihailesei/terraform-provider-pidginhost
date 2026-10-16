@@ -127,6 +127,7 @@ func (r *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	// resource is saved as tainted and replaced on the next apply, instead
 	// of a billable server being left outside Terraform's control.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), apiclient.FormatID(id))...)
+	setRulesSetManaged(ctx, resp.Private, tfutil.Known(plan.FirewallRulesSetID), &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -182,8 +183,8 @@ func (r *serverResource) saveAfterFailure(ctx context.Context, plan *serverModel
 }
 
 func nullUnknowns(m *serverModel) {
-	for _, s := range []*types.String{&m.Hostname, &m.Generation, &m.Project, &m.SSHPublicKey, &m.FirewallPolicyIn,
-		&m.FirewallPolicyOut, &m.PowerState, &m.Status, &m.ImageName, &m.Username, &m.IPv4Address, &m.IPv6Address} {
+	for _, s := range []*types.String{&m.Hostname, &m.Generation, &m.Project, &m.SSHPublicKey, &m.FirewallRulesSetID,
+		&m.FirewallPolicyIn, &m.FirewallPolicyOut, &m.PowerState, &m.Status, &m.ImageName, &m.Username, &m.IPv4Address, &m.IPv6Address} {
 		if s.IsUnknown() {
 			*s = types.StringNull()
 		}
@@ -266,7 +267,7 @@ func (r *serverResource) refresh(ctx context.Context, m *serverModel, creating b
 		return false, diags
 	}
 	if found {
-		setID, err := resolveRulesSetID(ctx, r.Client, pi.GetFwRulesSet())
+		setID, err := resolveRulesSetID(ctx, r.Client, pi.GetFwRulesSet(), m.FirewallRulesSetID.ValueString())
 		if err != nil {
 			diags.AddError("Error reading server firewall", err.Error())
 			return false, diags
@@ -452,11 +453,20 @@ func (r *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	// Firewall: POST public-interface.
-	if !plan.FirewallRulesSetID.Equal(state.FirewallRulesSetID) ||
+	// Firewall: POST public-interface. A rule set the configuration does
+	// not set is left as it is (rulesSetPlan keeps it in the plan), unless
+	// the configuration just stopped setting it, in which case the plan is
+	// null and the set is detached.
+	var configSet types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("firewall_rules_set_id"), &configSet)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	setChanged := !plan.FirewallRulesSetID.Equal(state.FirewallRulesSetID)
+	if setChanged ||
 		(tfutil.Known(plan.FirewallPolicyIn) && !plan.FirewallPolicyIn.Equal(state.FirewallPolicyIn)) ||
 		(tfutil.Known(plan.FirewallPolicyOut) && !plan.FirewallPolicyOut.Equal(state.FirewallPolicyOut)) {
-		if err := setFirewall(ctx, r.Client, id, plan.FirewallRulesSetID.ValueString(),
+		if err := setFirewall(ctx, r.Client, id, setChanged, plan.FirewallRulesSetID.ValueString(),
 			plan.FirewallPolicyIn.ValueString(), plan.FirewallPolicyOut.ValueString()); err != nil {
 			resp.Diagnostics.AddError("Error updating server firewall", err.Error())
 			return
@@ -487,6 +497,7 @@ func (r *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	setRulesSetManaged(ctx, resp.Private, !configSet.IsNull(), &resp.Diagnostics)
 	tfutil.ClearImported(ctx, resp)
 }
 

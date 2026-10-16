@@ -32,7 +32,7 @@ data "pidginhost_storage_products" "all" {}
 					resource.TestCheckResourceAttr("data.pidginhost_images.all", "images.0.default_username", "ubuntu"),
 					resource.TestCheckNoResourceAttr("data.pidginhost_images.all", "images.3.family_name"),
 					resource.TestCheckResourceAttr("data.pidginhost_images.ubuntu", "images.#", "2"),
-					resource.TestCheckResourceAttr("data.pidginhost_server_packages.all", "packages.#", "3"),
+					resource.TestCheckResourceAttr("data.pidginhost_server_packages.all", "packages.#", "4"),
 					resource.TestCheckResourceAttr("data.pidginhost_server_packages.all", "packages.0.cpus", "1"),
 					resource.TestCheckResourceAttr("data.pidginhost_server_packages.all", "packages.0.available_generations.#", "2"),
 					resource.TestCheckResourceAttr("data.pidginhost_server_packages.gen1", "packages.#", "2"),

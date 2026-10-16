@@ -9,9 +9,10 @@ import (
 )
 
 type ruleSet struct {
-	ID    int32
-	Name  string
-	Rules map[int32]*rule
+	ID       int32
+	Name     string
+	ReadOnly bool
+	Rules    map[int32]*rule
 }
 
 type rule struct {
@@ -53,7 +54,7 @@ func (s *ruleSet) json() map[string]any {
 		}
 		rules = append(rules, rj)
 	}
-	return map[string]any{"id": s.ID, "name": s.Name, "status": status, "rules": rules, "read_only": false}
+	return map[string]any{"id": s.ID, "name": s.Name, "status": status, "rules": rules, "read_only": s.ReadOnly}
 }
 
 func (r *rule) patch(b map[string]any) (field, msg string) {
@@ -84,6 +85,35 @@ func (r *rule) patch(b map[string]any) (field, msg string) {
 		r.Position = v
 	}
 	return "", ""
+}
+
+// freeTierRuleSetName is the read-only rule set the platform attaches to
+// every free-tier server.
+const freeTierRuleSetName = "Free tier FW"
+
+// freeTierRuleSet returns the platform's read-only free-tier rule set,
+// creating it on first use as the live API lists it for every account.
+func (f *Server) freeTierRuleSet() *ruleSet {
+	for _, s := range f.ruleSets {
+		if s.ReadOnly && s.Name == freeTierRuleSetName {
+			return s
+		}
+	}
+	s := &ruleSet{ID: f.id(), Name: freeTierRuleSetName, ReadOnly: true, Rules: map[int32]*rule{}}
+	f.ruleSets[s.ID] = s
+	return s
+}
+
+// FreeTierRuleSetID returns the ID of the platform's read-only rule set,
+// creating it if no free-tier server has been created yet.
+func (f *Server) FreeTierRuleSetID() int32 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.freeTierRuleSet().ID
+}
+
+func readOnly(w http.ResponseWriter) {
+	writeJSON(w, http.StatusForbidden, map[string]any{"detail": "This rules set is read only."})
 }
 
 // RuleSetIDs returns the IDs of all firewall rule sets.
@@ -134,6 +164,10 @@ func (f *Server) firewallRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("PATCH /api/cloud/firewall-rules-set/{id}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		f.withRuleSet(w, r, "id", func(s *ruleSet) {
+			if s.ReadOnly {
+				readOnly(w)
+				return
+			}
 			if n, ok := str(bodyOf(r), "name"); ok {
 				s.Name = n
 			}
@@ -142,6 +176,10 @@ func (f *Server) firewallRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("DELETE /api/cloud/firewall-rules-set/{id}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		f.withRuleSet(w, r, "id", func(s *ruleSet) {
+			if s.ReadOnly {
+				readOnly(w)
+				return
+			}
 			if f.ruleSetInUse(s.ID) {
 				badRequest(w, "detail", "The rules set is in use by a server.")
 				return
@@ -162,6 +200,10 @@ func (f *Server) firewallRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/cloud/firewall-rules-set/{rules_set_id}/rules/{$}", func(w http.ResponseWriter, r *http.Request) {
 		f.withRuleSet(w, r, "rules_set_id", func(s *ruleSet) {
+			if s.ReadOnly {
+				readOnly(w)
+				return
+			}
 			b := bodyOf(r)
 			if _, ok := str(b, "direction"); !ok {
 				badRequest(w, "direction", "This field is required.")
@@ -184,7 +226,11 @@ func (f *Server) firewallRoutes(mux *http.ServeMux) {
 		f.withRule(w, r, func(_ *ruleSet, ru *rule) { writeJSON(w, http.StatusOK, ru.json()) })
 	})
 	mux.HandleFunc("PATCH /api/cloud/firewall-rules-set/{rules_set_id}/rules/{rule_id}/{$}", func(w http.ResponseWriter, r *http.Request) {
-		f.withRule(w, r, func(_ *ruleSet, ru *rule) {
+		f.withRule(w, r, func(s *ruleSet, ru *rule) {
+			if s.ReadOnly {
+				readOnly(w)
+				return
+			}
 			if field, msg := ru.patch(bodyOf(r)); field != "" {
 				badRequest(w, field, msg)
 				return
@@ -194,6 +240,10 @@ func (f *Server) firewallRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("DELETE /api/cloud/firewall-rules-set/{rules_set_id}/rules/{rule_id}/{$}", func(w http.ResponseWriter, r *http.Request) {
 		f.withRule(w, r, func(s *ruleSet, ru *rule) {
+			if s.ReadOnly {
+				readOnly(w)
+				return
+			}
 			delete(s.Rules, ru.ID)
 			w.WriteHeader(http.StatusNoContent)
 		})

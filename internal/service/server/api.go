@@ -169,17 +169,22 @@ func publicInterface(ctx context.Context, c *apiclient.Client, id int32) (pi *sd
 }
 
 // setFirewall applies a rule set and policies to the public interface.
-// An empty setID detaches the current set.
+// When manageSet is false the fw_rules_set field is omitted, which leaves
+// whatever set is attached (for example the platform's read-only set on a
+// free-tier server) untouched. Otherwise an empty setID detaches the current
+// set.
 //
 // The field must be sent as an explicit JSON null to detach a set: omitting
 // it leaves the current set attached. (The official provider's "inconsistent
 // result after apply" bug came from fw_rules_set being cleared on one side
 // but not the other.)
-func setFirewall(ctx context.Context, c *apiclient.Client, id int32, setID, policyIn, policyOut string) error {
+func setFirewall(ctx context.Context, c *apiclient.Client, id int32, manageSet bool, setID, policyIn, policyOut string) error {
 	body := sdk.NewPublicInterfaceRequest()
-	if setID == "" {
+	switch {
+	case !manageSet:
+	case setID == "":
 		body.SetFwRulesSetNil()
-	} else {
+	default:
 		body.SetFwRulesSet(setID)
 	}
 	if policyIn != "" {
@@ -196,14 +201,19 @@ func setFirewall(ctx context.Context, c *apiclient.Client, id int32, setID, poli
 }
 
 // resolveRulesSetID turns the fw_rules_set value returned by the public
-// interface into a rule set ID.
+// interface into a rule set ID, so that state holds a stable ID whichever
+// form the API uses.
 //
 // Assumption: the spec documents the field as "ID or slug", but
-// FirewallRulesSet has no slug property. A numeric value is taken as the ID;
-// anything else is matched against rule set names. If nothing matches, the
-// raw value is returned so that the difference shows up as drift rather than
-// being hidden.
-func resolveRulesSetID(ctx context.Context, c *apiclient.Client, raw string) (string, error) {
+// FirewallRulesSet has no slug property. A numeric value is taken as the ID.
+// The live API reports the read-only set it attaches to free-tier servers by
+// its name in lower case ("free tier fw" for the set named "Free tier FW";
+// see UPSTREAM_ISSUES C5), so anything else is matched against rule set
+// names, read-only sets included, ignoring case. When several sets match,
+// prior (the ID currently in state) wins if it is one of them, then an
+// exact-case match. If nothing matches, the raw value is returned so that
+// the difference shows up as drift rather than being hidden.
+func resolveRulesSetID(ctx context.Context, c *apiclient.Client, raw, prior string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
@@ -214,19 +224,32 @@ func resolveRulesSetID(ctx context.Context, c *apiclient.Client, raw string) (st
 	if err != nil {
 		return "", fmt.Errorf("listing firewall rule sets: %s", apiclient.ErrorDetail(err, httpResp))
 	}
-	var match string
+	return matchRulesSetName(sets, raw, prior), nil
+}
+
+func matchRulesSetName(sets []sdk.FirewallRulesSet, raw, prior string) string {
+	var matches, exact []string
 	for _, s := range sets {
+		if !strings.EqualFold(s.GetName(), raw) {
+			continue
+		}
+		id := apiclient.FormatID(s.GetId())
+		if id == prior {
+			return id
+		}
+		matches = append(matches, id)
 		if s.GetName() == raw {
-			if match != "" {
-				return raw, nil // ambiguous
-			}
-			match = apiclient.FormatID(s.GetId())
+			exact = append(exact, id)
 		}
 	}
-	if match == "" {
-		return raw, nil
+	switch {
+	case len(matches) == 1:
+		return matches[0]
+	case len(exact) == 1:
+		return exact[0]
+	default:
+		return raw
 	}
-	return match, nil
 }
 
 // samePackage reports whether two package references (ID, slug or name)

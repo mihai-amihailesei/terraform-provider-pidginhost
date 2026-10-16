@@ -50,6 +50,11 @@ type Server struct {
 	// FailProvisioning makes new servers end in status "failed".
 	FailProvisioning bool
 
+	// ReportRuleSetsByName makes a server's public interface report every
+	// rule set by its name in lower case, as the live API does for the
+	// read-only free-tier set, instead of by ID.
+	ReportRuleSetsByName bool
+
 	images          []map[string]any
 	packages        []map[string]any
 	storageProducts []map[string]any
